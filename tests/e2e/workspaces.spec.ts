@@ -4,6 +4,8 @@ import { expectCompleteTestIdCoverage } from './coverage.js';
 
 const examples = resolve(import.meta.dirname, '../../examples');
 
+test.use({ serviceWorkers: 'allow' });
+
 test('creates a workspace, imports every format and restores it after refresh', async ({
   page,
 }) => {
