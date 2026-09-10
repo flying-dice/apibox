@@ -1,6 +1,6 @@
 # apibox — status
 
-**Updated:** 2026-09-10 20:56 UTC · **Branch:** `main` (pre-first-commit) · **Working tree:** verified and ready to commit
+**Updated:** 2026-09-10 21:02 UTC · **Branch:** `main` · **Working tree:** GitHub delivery pipelines added after initial commit
 
 ## Goal / health
 
@@ -21,7 +21,8 @@ Antigravity review gate was removed at the user's direction.
 Card [11](boards/project-backlog/11-github-pages-deploy-and-release.md) is in **Review**.
 The public package contains a bundled CLI and viewer with explicit runtime dependencies;
 CI covers Storybook and an isolated lifecycle-free consumer install, the release workflow
-refreshes tracked artifacts, and the VS Code command emits the current Pages action chain.
+refreshes tracked artifacts, and dedicated GitHub workflows deploy the example Pages site
+and package or publish the VS Code extension.
 
 Cards [04](boards/project-backlog/04-ui-atoms-and-molecules.md),
 [05](boards/project-backlog/05-ui-schema-viewer.md) and

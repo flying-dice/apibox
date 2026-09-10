@@ -1,0 +1,85 @@
+name: VS Code extension
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Build VSIX
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Install dependencies
+        run: bun ci
+
+      - name: Build viewer assets
+        run: bun run --cwd packages/viewer build:webview
+
+      - name: Package extension
+        run: bun run --cwd packages/extension package
+
+      - name: Upload VSIX
+        uses: actions/upload-artifact@v5
+        with:
+          name: apibox-vscode-${{ github.sha }}
+          path: packages/extension/*.vsix
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    name: Publish to VS Code Marketplace
+    if: github.event_name == 'release' && github.event.action == 'published'
+    needs: package
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: vscode-marketplace
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Install dependencies
+        run: bun ci
+
+      - name: Download VSIX
+        uses: actions/download-artifact@v6
+        with:
+          name: apibox-vscode-${{ github.sha }}
+          path: extension
+
+      - name: Validate release version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          EXTENSION_VERSION="$(bun -p "require('./packages/extension/package.json').version")"
+          if [ "$RELEASE_TAG" != "v$EXTENSION_VERSION" ]; then
+            echo "Release tag $RELEASE_TAG does not match extension version v$EXTENSION_VERSION."
+            exit 1
+          fi
+
+      - name: Publish extension
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: cd packages/extension && bunx --no-install vsce publish --packagePath ../../extension/*.vsix

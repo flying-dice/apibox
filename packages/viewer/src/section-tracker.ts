@@ -15,6 +15,7 @@ export function createSectionTracker(
 ): SectionTracker {
   let observer: IntersectionObserver | undefined;
   let observationGeneration = 0;
+  let requestedSectionId: string | undefined;
 
   return {
     observe(apiDocument) {
@@ -30,8 +31,12 @@ export function createSectionTracker(
             const activeSectionEntry = entries
               .filter((entry) => entry.isIntersecting)
               .sort((left, right) => left.boundingClientRect.top - right.boundingClientRect.top)[0];
-            const sectionId = activeSectionEntry?.target.id;
+            const sectionId =
+              requestedSectionId && ids.has(requestedSectionId)
+                ? requestedSectionId
+                : activeSectionEntry?.target.id;
             if (!sectionId || !ids.has(sectionId)) return;
+            requestedSectionId = undefined;
             onSectionChange(sectionId);
             router.navigate({ documentId: apiDocument.id, sectionId }, true);
           },
@@ -45,11 +50,13 @@ export function createSectionTracker(
       });
     },
     scrollTo(sectionId) {
+      requestedSectionId = sectionId;
       if (!sectionId) return;
       target.document.getElementById(sectionId)?.scrollIntoView({ block: 'start' });
     },
     dispose() {
       observationGeneration += 1;
+      requestedSectionId = undefined;
       observer?.disconnect();
     },
   };

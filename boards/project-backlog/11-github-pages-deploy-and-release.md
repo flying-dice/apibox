@@ -5,7 +5,7 @@ priority: med
 package: root
 agent: codex
 live: false
-updatedAt: 2026-09-10T19:39:18.000Z
+updatedAt: 2026-09-10T21:02:00.000Z
 ---
 # GitHub Pages deploy and release pipeline
 
@@ -30,6 +30,8 @@ it needs verifying for real against a pushed branch.
 - [x] `.github/workflows/ci.yml` — typecheck, lint, test, build, Storybook
 - [x] `.github/workflows/release.yml` — build viewer, commit prebuilt assets
 - [x] Pages workflow template emitted by the deploy command
+- [x] Repository Pages workflow builds and deploys the checked-in examples
+- [x] VS Code extension workflow packages a VSIX on changes and publishes it on a GitHub release
 - [ ] Verified: `bunx github:flying-dice/apibox build ./spec.yaml` on a clean machine — literal GitHub transport requires the first commit and push; the lifecycle-free packed artifact passed the equivalent isolated-consumer test
 
 ## Gates
@@ -41,3 +43,4 @@ it needs verifying for real against a pushed branch.
 
 - **codex** (2026-09-10T19:15:00.000Z): Claimed the final non-Review card. The Pages scaffold already exists in packages/extension/src/workflow.ts:1 and has unit coverage in packages/extension/src/extension.test.ts:35; CI exists at .github/workflows/ci.yml:1 but still needs Storybook. Closing the root runtime dependency and core distribution gaps, then adding release automation and a clean-consumer verification path.
 - **codex** (2026-09-10T19:39:18.000Z): Made the root package consumable at package.json:12-27 and package.json:55-59, with workspace core bundled by scripts/bundle-cli.mjs:4-41 and explicit runtime externals derived from package metadata. Added isolated lifecycle-free installation and CLI execution at scripts/verify-package.mjs:15-50, now enforced by .github/workflows/ci.yml:37-44 alongside Storybook. Added artifact refresh automation at .github/workflows/release.yml:1-49, updated the generated Pages action sequence at packages/extension/src/workflow.ts:25-39, and documented operation at docs/05-deployment-and-release.md:1-37. The packed archive installed 168 production packages and generated a valid site. Literal `bunx github:` transport remains a first-push review check because this checkout has no HEAD or remote.
+- **codex** (2026-09-10T21:02:00.000Z): Added first-party GitHub Actions pipelines for the example documentation site and VS Code extension. Pages builds from the checked-in source and deploys through the protected `github-pages` environment; the extension packages a retained VSIX for changes and publishes that same artifact from GitHub releases through the `vscode-marketplace` environment.

@@ -213,7 +213,26 @@ describe('viewer shell', () => {
     render(App, { dataSource, navigation: createBrowserNavigation(window) });
     await screen.findByTestId('openapi-document');
     const operation = document.getElementById('listPets');
+    const group = document.getElementById('tag-pets');
     expect(operation).not.toBeNull();
+    expect(group).not.toBeNull();
+
+    const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView');
+    await userEvent.click(screen.getByTestId('viewer-nav-listPets'));
+    await waitFor(() => expect(window.location.hash).toBe('#/petstore/listPets'));
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+    notify(
+      [
+        {
+          isIntersecting: true,
+          target: group,
+          boundingClientRect: { top: 0 },
+        } as unknown as IntersectionObserverEntry,
+      ],
+      {} as IntersectionObserver,
+    );
+    expect(window.location.hash).toBe('#/petstore/listPets');
+    scrollIntoView.mockRestore();
 
     notify(
       [
