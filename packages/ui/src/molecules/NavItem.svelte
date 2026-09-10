@@ -51,7 +51,10 @@
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
       return;
     }
-    onnavigate?.(href);
+    if (onnavigate) {
+      event.preventDefault();
+      onnavigate(href);
+    }
   }}
 >
   {#if badge}

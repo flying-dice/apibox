@@ -46,6 +46,32 @@
     },
   };
 
+  function navigateToDocument(documentId: string): void {
+    navigation.router.navigate({ documentId });
+  }
+
+  function navigateToSection(sectionId: string): void {
+    if (!currentDocument) return;
+    navigation.router.navigate({ documentId: currentDocument.id, sectionId });
+    // A repeated click does not emit hashchange, but should still return to the section.
+    sectionTracker?.scrollTo(sectionId);
+  }
+
+  function navigateHome(event: MouseEvent): void {
+    if (
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey ||
+      event.button !== 0 ||
+      !currentDocument
+    ) {
+      return;
+    }
+    event.preventDefault();
+    navigateToDocument(currentDocument.id);
+  }
+
   onMount(() => {
     sectionTracker = navigation.createSectionTracker((sectionId) => {
       session.currentSection = sectionId;
@@ -82,6 +108,7 @@
         <a
           class="brand"
           href={navigation.router.href({ documentId: currentDocument?.id })}
+          onclick={navigateHome}
           data-testid="viewer-home">apibox</a
         >
         {#if sidebarHeader}
@@ -95,6 +122,7 @@
                 label={entry.title}
                 current={entry.id === currentDocument?.id}
                 testId="viewer-document-{entry.id}"
+                onnavigate={() => navigateToDocument(entry.id)}
               />
             {/each}
           </nav>
@@ -111,6 +139,7 @@
               hrefFor={(sectionId) =>
                 navigation.router.href({ documentId: currentDocument.id, sectionId })}
               currentSection={session.currentSection}
+              onnavigate={navigateToSection}
             />
           </nav>
         {/if}
@@ -143,6 +172,7 @@
               label={node.label}
               current={session.currentSection === node.id}
               testId="viewer-on-page-{node.id}"
+              onnavigate={() => navigateToSection(node.id)}
             />
           {/each}
         </nav>

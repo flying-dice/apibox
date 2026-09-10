@@ -1,6 +1,6 @@
 # apibox — status
 
-**Updated:** 2026-09-10 21:10 UTC · **Branch:** `main` · **Working tree:** card 14 ready to publish
+**Updated:** 2026-09-10 21:38 UTC · **Branch:** `main` · **Working tree:** VS Code navigation fix verified
 
 ## Goal / health
 
@@ -23,6 +23,11 @@ GitHub Pages is a local-first installable PWA with versioned IndexedDB workspace
 multi-file import, partial-failure handling, confirmed deletion and offline reopening.
 Bundled examples remain immutable. VS Code development opens an isolated `examples/`
 Extension Host, and supported files expose native Explorer/editor context actions.
+
+Card [09](boards/project-backlog/09-vscode-extension.md) remains in **Review**. Its embedded
+viewer now routes plain nav clicks explicitly because VS Code webviews suppress default hash-link
+navigation. A clean Extension Development Host verified real pointer navigation and scrolling;
+the standard Extension Host integration test remains green.
 
 Card [11](boards/project-backlog/11-github-pages-deploy-and-release.md) is in **Review**.
 The public package contains a bundled CLI and viewer with explicit runtime dependencies;
@@ -52,7 +57,7 @@ every browser-facing workflow and all three supported formats through real CLI o
 
 ## Next
 
-Publish the Review-ready update to GitLab and GitHub, then collect human review.
+Collect human review and monitor the publication pipelines.
 
 ## Later
 
@@ -85,6 +90,9 @@ Publish the Review-ready update to GitLab and GitHub, then collect human review.
   Storybook, release-artifact and Pages workflows are in place.
 - All workspace packages expose `dev`; the root provides named commands for every runnable
   surface, and each was smoke-tested through readiness.
+- VS Code section, document and home links no longer depend on the webview's suppressed anchor
+  default. A real pointer click in a clean Extension Development Host changed the route from
+  `#/petstore` to `#/petstore/listpets` and scrolled to the rendered operation.
 
 **Unresolved:**
 

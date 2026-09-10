@@ -7,6 +7,7 @@
     nodes: readonly NavNode[];
     hrefFor: (sectionId: string) => string;
     currentSection?: string;
+    onnavigate?: (sectionId: string) => void;
     depth?: number;
     testId?: string;
   }
@@ -15,6 +16,7 @@
     nodes,
     hrefFor,
     currentSection,
+    onnavigate,
     depth = 0,
     testId = 'viewer-nav',
   }: Props = $props();
@@ -32,12 +34,14 @@
       deprecated={node.deprecated}
       {depth}
       testId="{testId}-{node.id}"
+      onnavigate={() => onnavigate?.(node.id)}
     />
     {#if node.children?.length}
       <SidebarNav
         nodes={node.children}
         {hrefFor}
         {currentSection}
+        {onnavigate}
         depth={depth + 1}
         {testId}
       />

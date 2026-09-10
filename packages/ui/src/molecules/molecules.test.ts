@@ -327,8 +327,11 @@ describe('NavItem', () => {
     const onnavigate = vi.fn();
     render(NavItem, { href: '#/a', label: 'A', testId: 'nav-a', onnavigate });
 
-    await userEvent.click(screen.getByTestId('nav-a'));
+    const link = screen.getByTestId('nav-a');
+    const event = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
+    link.dispatchEvent(event);
     expect(onnavigate).toHaveBeenCalledWith('#/a');
+    expect(event.defaultPrevented).toBe(true);
   });
 
   it('leaves a modified click to the browser', async () => {

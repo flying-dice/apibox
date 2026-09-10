@@ -5,7 +5,7 @@ priority: high
 package: extension
 agent: codex
 live: false
-updatedAt: 2026-09-10T18:16:50.000Z
+updatedAt: 2026-09-10T21:38:00.000Z
 ---
 # VS Code extension
 
@@ -29,3 +29,4 @@ classic late derailment.
 
 - **codex** (2026-09-10T18:02:04.000Z): Claimed after the static-site generator entered Review. Starting with the custom editor and the already-defined correlated webview protocol, then layering the build and deploy commands over the tested CLI API.
 - **codex** (2026-09-10T18:16:50.000Z): Moved to Review. The optional custom editor parses the active document through core, serves the viewer over shared runtime-validated request/response guards, and debounces live document refreshes with disposal-safe error handling. Preview, static build and Pages workflow commands are contributed; the workflow keeps user input YAML- and shell-safe. The extension host is esbuild-bundled, webview/static assets are staged before replacement, and `apibox-vscode-0.1.0.vsix` packages cleanly at 2.25 MB with a one-click Extension Host launch task. The full Review gate is green: 230 source tests, all workspace builds, zero clean-code markers above 0.5, and all three independent clean-code re-checks clear.
+- **codex** (2026-09-10T21:38:00.000Z): Fixed VS Code webview navigation after reproducing the failure with a true workbench-level pointer click. VS Code delivered the complete click sequence but suppressed the anchor's default hash change, so the shared viewer now handles unmodified document, section, right-rail and home clicks through its router while retaining real hrefs and modified-click behavior. Verified in a clean Extension Development Host: the section click changed `#/petstore` to `#/petstore/listpets`, scrolled from 0 to 1034.5px, and the document click returned to `#/petstore`. Typecheck, lint, 243 unit tests, 20 Playwright tests and the official Extension Host integration test are green.
