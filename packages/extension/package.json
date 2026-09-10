@@ -1,0 +1,87 @@
+{
+  "name": "apibox-vscode",
+  "displayName": "APIBox",
+  "description": "Preview API specifications and publish them as static documentation.",
+  "version": "0.1.0",
+  "publisher": "flying-dice",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/flying-dice/apibox.git"
+  },
+  "type": "module",
+  "engines": {
+    "vscode": "^1.137.0"
+  },
+  "main": "./dist/extension.js",
+  "files": [
+    "LICENSE",
+    "dist",
+    "media",
+    "static-viewer"
+  ],
+  "activationEvents": [
+    "onCustomEditor:apibox.preview",
+    "onCommand:apibox.preview",
+    "onCommand:apibox.build",
+    "onCommand:apibox.deploy"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "apibox.preview",
+        "title": "Preview API Document",
+        "category": "APIBox"
+      },
+      {
+        "command": "apibox.build",
+        "title": "Build Static Site",
+        "category": "APIBox"
+      },
+      {
+        "command": "apibox.deploy",
+        "title": "Deploy Static Site to GitHub Pages",
+        "category": "APIBox"
+      }
+    ],
+    "customEditors": [
+      {
+        "viewType": "apibox.preview",
+        "displayName": "APIBox Preview",
+        "selector": [
+          {
+            "filenamePattern": "*.yaml"
+          },
+          {
+            "filenamePattern": "*.yml"
+          },
+          {
+            "filenamePattern": "*.json"
+          }
+        ],
+        "priority": "option"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "bun run --cwd ../viewer build:webview && bun run sync-assets && node scripts/build.mjs --watch",
+    "sync-assets": "node scripts/sync-assets.mjs",
+    "package": "bun run sync-assets && bun run build && vsce package --no-dependencies",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run src"
+  },
+  "dependencies": {
+    "@apibox/cli": "workspace:*",
+    "@apibox/core": "workspace:*",
+    "@apibox/viewer": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.2",
+    "@types/vscode": "^1.137.0",
+    "@vscode/vsce": "^3.9.2",
+    "esbuild": "^0.28.2",
+    "typescript": "5.9.3",
+    "vitest": "5.0.0"
+  }
+}

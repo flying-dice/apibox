@@ -1,0 +1,36 @@
+{
+  "name": "@apibox/viewer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./protocol": "./src/protocol.ts"
+  },
+  "scripts": {
+    "build": "bun run build:web && bun run build:webview",
+    "build:web": "vite build --outDir dist",
+    "build:webview": "APIBOX_TARGET=webview vite build --outDir dist-webview",
+    "dev": "vite",
+    "dev:webview": "APIBOX_TARGET=webview vite",
+    "preview": "vite preview",
+    "typecheck": "svelte-check --tsconfig ./tsconfig.json --threshold error",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@apibox/core": "workspace:*",
+    "@apibox/ui": "workspace:*",
+    "svelte": "5.57.0"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "7.3.0",
+    "@testing-library/jest-dom": "7.0.1",
+    "@testing-library/svelte": "5.4.2",
+    "@testing-library/user-event": "14.6.7",
+    "jsdom": "30.0.1",
+    "svelte-check": "4.7.6",
+    "typescript": "5.9.3",
+    "vite": "8.3.0",
+    "vitest": "5.0.0"
+  }
+}

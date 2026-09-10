@@ -1,0 +1,100 @@
+/*
+ * The semantic token layer.
+ *
+ * Components reference these `--apibox-*` tokens and nothing else. They never name a
+ * `--vscode-*` variable and never write a colour literal.
+ *
+ * Each token resolves to a VS Code theme variable with a fallback. Inside a webview those
+ * variables are supplied by VS Code, so documentation inherits the user's theme for free —
+ * including themes we have never seen — and follows a theme switch without a reload.
+ * Outside a webview, `theme-dark.css` and `theme-light.css` define the same `--vscode-*`
+ * variables on `:root`, so the fallbacks are a safety net rather than the usual path.
+ *
+ * The fallbacks are Dark Modern's values, so a host that supplies nothing still renders a
+ * coherent dark UI rather than a patchwork.
+ */
+
+:root {
+  /* -- Surfaces ------------------------------------------------------------ */
+  --apibox-bg: var(--vscode-editor-background, #1f1f1f);
+  --apibox-bg-sunken: var(--vscode-sideBar-background, #181818);
+  --apibox-bg-raised: var(--vscode-editorWidget-background, #202020);
+  --apibox-bg-input: var(--vscode-input-background, #313131);
+  --apibox-bg-hover: var(--vscode-list-hoverBackground, #2a2d2e);
+  --apibox-bg-active: var(--vscode-list-activeSelectionBackground, #04395e);
+  --apibox-bg-code: var(--vscode-textCodeBlock-background, #2b2b2b);
+
+  /* -- Text ---------------------------------------------------------------- */
+  --apibox-fg: var(--vscode-foreground, #cccccc);
+  --apibox-fg-muted: var(--vscode-descriptionForeground, #9d9d9d);
+  --apibox-fg-on-accent: var(--vscode-button-foreground, #ffffff);
+  --apibox-fg-active: var(--vscode-list-activeSelectionForeground, #ffffff);
+
+  /* -- Lines --------------------------------------------------------------- */
+  --apibox-border: var(--vscode-panel-border, #2b2b2b);
+  --apibox-border-strong: var(--vscode-contrastBorder, #3c3c3c);
+  --apibox-border-input: var(--vscode-input-border, #3c3c3c);
+
+  /* -- Interaction --------------------------------------------------------- */
+  --apibox-accent: var(--vscode-textLink-foreground, #4daafc);
+  --apibox-accent-hover: var(--vscode-textLink-activeForeground, #6cb8ff);
+  --apibox-focus: var(--vscode-focusBorder, #0078d4);
+  --apibox-button-bg: var(--vscode-button-background, #0078d4);
+  --apibox-button-bg-hover: var(--vscode-button-hoverBackground, #026ec1);
+  --apibox-badge-bg: var(--vscode-badge-background, #616161);
+  --apibox-badge-fg: var(--vscode-badge-foreground, #f8f8f8);
+
+  /* -- Status -------------------------------------------------------------- */
+  --apibox-success: var(--vscode-charts-green, #89d185);
+  --apibox-warning: var(--vscode-charts-yellow, #cca700);
+  --apibox-danger: var(--vscode-charts-red, #f14c4c);
+  --apibox-info: var(--vscode-charts-blue, #3794ff);
+  --apibox-neutral: var(--vscode-charts-foreground, #cccccc);
+
+  /*
+   * HTTP methods. Mapped onto VS Code's chart palette rather than invented, so they stay
+   * legible in any theme: a user's theme defines these, and they are chosen to be
+   * distinguishable from one another by construction.
+   */
+  --apibox-method-get: var(--vscode-charts-blue, #3794ff);
+  --apibox-method-post: var(--vscode-charts-green, #89d185);
+  --apibox-method-put: var(--vscode-charts-orange, #d18616);
+  --apibox-method-patch: var(--vscode-charts-purple, #b180d7);
+  --apibox-method-delete: var(--vscode-charts-red, #f14c4c);
+  --apibox-method-head: var(--vscode-charts-foreground, #cccccc);
+  --apibox-method-options: var(--vscode-charts-foreground, #cccccc);
+  --apibox-method-trace: var(--vscode-charts-foreground, #cccccc);
+
+  /* AsyncAPI operation direction, and JSON-RPC methods. */
+  --apibox-action-send: var(--vscode-charts-orange, #d18616);
+  --apibox-action-receive: var(--vscode-charts-blue, #3794ff);
+  --apibox-action-rpc: var(--vscode-charts-purple, #b180d7);
+
+  /* -- Type ---------------------------------------------------------------- */
+  --apibox-font: var(--vscode-font-family, ui-sans-serif, system-ui, -apple-system, sans-serif);
+  --apibox-font-code: var(--vscode-editor-font-family, ui-monospace, "SF Mono", Menlo, monospace);
+  --apibox-font-size: var(--vscode-font-size, 13px);
+  --apibox-font-size-code: var(--vscode-editor-font-size, 12px);
+  --apibox-font-size-sm: 11px;
+  --apibox-font-size-lg: 16px;
+  --apibox-font-size-xl: 22px;
+  --apibox-font-weight: var(--vscode-font-weight, normal);
+  --apibox-font-weight-bold: 600;
+  --apibox-line-height: 1.5;
+
+  /*
+   * Spacing. A 4px scale, because VS Code's own density is tighter than a typical web
+   * document and documentation embedded in an editor should not feel like a website.
+   */
+  --apibox-space-1: 2px;
+  --apibox-space-2: 4px;
+  --apibox-space-3: 8px;
+  --apibox-space-4: 12px;
+  --apibox-space-5: 16px;
+  --apibox-space-6: 24px;
+  --apibox-space-7: 32px;
+
+  --apibox-radius: 3px;
+  --apibox-radius-lg: 6px;
+  --apibox-radius-pill: 999px;
+}

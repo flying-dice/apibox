@@ -1,0 +1,30 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build APIBox Extension",
+      "type": "shell",
+      "command": "bun run --cwd packages/extension sync-assets && bun run --filter apibox-vscode build",
+      "problemMatcher": [],
+      "group": "build"
+    },
+    {
+      "label": "Develop APIBox Extension",
+      "type": "shell",
+      "command": "bun run dev:extension",
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "apibox-extension",
+        "pattern": {
+          "regexp": "^(?!x)x$"
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^Starting APIBox extension development mode$",
+          "endsPattern": "^APIBox extension build ready; watching for changes$"
+        }
+      },
+      "group": "build"
+    }
+  ]
+}

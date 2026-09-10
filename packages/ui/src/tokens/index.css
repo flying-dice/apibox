@@ -1,0 +1,8 @@
+/*
+ * The entry point for the design language. Import this once, at the root of a host.
+ *
+ * Note the order: tokens define the semantic layer, the reset consumes it. A theme
+ * stylesheet is imported separately and only outside a VS Code webview.
+ */
+@import "./tokens.css";
+@import "./reset.css";

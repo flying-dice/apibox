@@ -1,0 +1,203 @@
+openapi: 3.1.0
+info:
+  title: Petstore
+  version: 1.4.0
+  summary: A small store that sells pets.
+  description: |
+    The **Petstore** is the canonical example API. It exists so that renderers have
+    something realistic to chew on: tags, path and query parameters, request bodies,
+    several response codes, security schemes and a recursive schema.
+  contact:
+    name: Petstore Support
+    url: https://example.com/support
+    email: support@example.com
+  license:
+    name: MIT
+    identifier: MIT
+servers:
+  - url: https://api.example.com/v1
+    description: Production
+  - url: https://staging.api.example.com/v1
+    description: Staging
+tags:
+  - name: pets
+    description: Everything about the animals in the store.
+  - name: store
+    description: Orders and inventory.
+security:
+  - apiKey: []
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      summary: List pets
+      description: Returns a paginated list of pets, optionally filtered by tag.
+      tags: [pets]
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of pets to return.
+          required: false
+          schema: { type: integer, format: int32, minimum: 1, maximum: 100, default: 20 }
+        - name: tag
+          in: query
+          description: Only return pets carrying this tag.
+          required: false
+          schema: { type: string }
+        - name: X-Request-Id
+          in: header
+          description: Correlation id echoed back on the response.
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: A page of pets.
+          headers:
+            X-Total-Count:
+              description: Total number of pets matching the filter.
+              schema: { type: integer }
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Pet' }
+              examples:
+                twoPets:
+                  summary: Two pets
+                  value:
+                    - id: 1
+                      name: Fido
+                      status: available
+                    - id: 2
+                      name: Whiskers
+                      status: pending
+        '400': { $ref: '#/components/responses/BadRequest' }
+    post:
+      operationId: createPet
+      summary: Create a pet
+      description: Adds a new pet to the store.
+      tags: [pets]
+      requestBody:
+        required: true
+        description: The pet to add.
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NewPet' }
+            examples:
+              minimal:
+                summary: Minimal pet
+                value: { name: Rex }
+      responses:
+        '201':
+          description: The created pet.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Pet' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409':
+          description: A pet with that name already exists.
+  /pets/{petId}:
+    parameters:
+      - name: petId
+        in: path
+        required: true
+        description: Identifier of the pet.
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getPet
+      summary: Get a pet
+      tags: [pets]
+      responses:
+        '200':
+          description: The pet.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Pet' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: deletePet
+      summary: Delete a pet
+      description: Removes a pet from the store. This cannot be undone.
+      tags: [pets]
+      deprecated: true
+      responses:
+        '204': { description: Deleted. }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /store/inventory:
+    get:
+      operationId: getInventory
+      summary: Inventory by status
+      tags: [store]
+      security: []
+      responses:
+        '200':
+          description: A map of status to quantity.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: { type: integer, format: int32 }
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      name: X-API-Key
+      in: header
+      description: A key issued from the developer portal.
+    oauth:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://example.com/oauth/authorize
+          tokenUrl: https://example.com/oauth/token
+          scopes:
+            'pets:read': Read pets
+            'pets:write': Create and modify pets
+  responses:
+    BadRequest:
+      description: The request was malformed.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: No such resource.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+  schemas:
+    Pet:
+      type: object
+      description: A pet available in the store.
+      required: [id, name, status]
+      properties:
+        id: { type: integer, format: int64, readOnly: true, description: Unique identifier. }
+        name: { type: string, minLength: 1, maxLength: 64, description: The pet's name. }
+        status:
+          type: string
+          description: Availability of the pet.
+          enum: [available, pending, sold]
+          default: available
+        tags:
+          type: array
+          description: Free-form labels.
+          items: { type: string }
+        parent:
+          description: The pet this one descends from, if known.
+          $ref: '#/components/schemas/Pet'
+    NewPet:
+      type: object
+      description: The fields accepted when creating a pet.
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1 }
+        tags:
+          type: array
+          items: { type: string }
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string, examples: ['not_found'] }
+        message: { type: string }
+        details:
+          type: array
+          items: { type: object, additionalProperties: true }

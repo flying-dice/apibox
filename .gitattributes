@@ -1,0 +1,4 @@
+packages/cli/assets/viewer/** binary
+packages/cli/dist/index.js binary
+packages/extension/media/assets/** binary
+packages/extension/static-viewer/assets/** binary

@@ -1,0 +1,54 @@
+/*
+ * A minimal reset. Deliberately small: inside a webview VS Code has already normalised
+ * most of this, and a heavy reset would fight it.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--apibox-bg);
+  color: var(--apibox-fg);
+  font-family: var(--apibox-font);
+  font-size: var(--apibox-font-size);
+  font-weight: var(--apibox-font-weight);
+  line-height: var(--apibox-line-height);
+}
+
+:where(h1, h2, h3, h4, h5, h6) {
+  margin: 0;
+  font-weight: var(--apibox-font-weight-bold);
+  line-height: 1.3;
+}
+
+:where(p, ul, ol, pre) {
+  margin: 0;
+}
+
+:where(a) {
+  color: var(--apibox-accent);
+  text-decoration: none;
+}
+
+:where(a:hover) {
+  color: var(--apibox-accent-hover);
+  text-decoration: underline;
+}
+
+:where(code, pre, kbd, samp) {
+  font-family: var(--apibox-font-code);
+  font-size: var(--apibox-font-size-code);
+}
+
+/*
+ * One focus ring everywhere, matching VS Code's. Keyboard users get a visible ring; mouse
+ * users do not, which is what `:focus-visible` is for.
+ */
+:where(:focus-visible) {
+  outline: 1px solid var(--apibox-focus);
+  outline-offset: 1px;
+}

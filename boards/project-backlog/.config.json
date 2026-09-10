@@ -1,0 +1,117 @@
+{
+  "name": "apibox",
+  "columns": [
+    {
+      "id": "backlog",
+      "name": "Backlog"
+    },
+    {
+      "id": "todo",
+      "name": "To do"
+    },
+    {
+      "id": "doing",
+      "name": "In progress",
+      "wipLimit": 2
+    },
+    {
+      "id": "review",
+      "name": "Review",
+      "enter": [
+        {
+          "id": "tests-passing",
+          "label": "Tests pass",
+          "script": "bun run typecheck && bun run lint && bun run test"
+        },
+        {
+          "id": "clean-code-review",
+          "label": "No clean-code marker above 0.5",
+          "script": "grep -rn 'TODO: clean-code' packages/ | awk -F' - ' '$2+0 > 0.5' | wc -l"
+        }
+      ]
+    },
+    {
+      "id": "done",
+      "name": "Done",
+      "enter": [
+        {
+          "id": "peer-reviewed",
+          "label": "Signed off by a human",
+          "field": "peer-reviewed",
+          "check": "= true"
+        }
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "id": "core",
+      "name": "core",
+      "color": "#4daafc"
+    },
+    {
+      "id": "ui",
+      "name": "ui",
+      "color": "#c586c0"
+    },
+    {
+      "id": "viewer",
+      "name": "viewer",
+      "color": "#4ec9b0"
+    },
+    {
+      "id": "cli",
+      "name": "cli",
+      "color": "#dcdcaa"
+    },
+    {
+      "id": "extension",
+      "name": "extension",
+      "color": "#ce9178"
+    },
+    {
+      "id": "infra",
+      "name": "infra",
+      "color": "#808080"
+    },
+    {
+      "id": "openapi",
+      "name": "openapi",
+      "color": "#6a9955"
+    },
+    {
+      "id": "asyncapi",
+      "name": "asyncapi",
+      "color": "#569cd6"
+    },
+    {
+      "id": "jsonrpc",
+      "name": "jsonrpc",
+      "color": "#d16969"
+    }
+  ],
+  "fields": [
+    {
+      "id": "package",
+      "label": "Package",
+      "type": "select",
+      "options": [
+        "root",
+        "core",
+        "ui",
+        "viewer",
+        "cli",
+        "extension"
+      ]
+    },
+    {
+      "id": "peer-reviewed",
+      "label": "Peer reviewed",
+      "type": "select",
+      "options": [
+        "true",
+        "false"
+      ]
+    }
+  ]
+}

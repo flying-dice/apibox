@@ -1,0 +1,16 @@
+:root,
+body,
+#app {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  color: var(--apibox-fg);
+  background: var(--apibox-bg);
+}
+
+button,
+input {
+  font: inherit;
+}

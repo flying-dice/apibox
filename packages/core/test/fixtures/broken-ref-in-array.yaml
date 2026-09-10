@@ -1,0 +1,23 @@
+openapi: 3.1.0
+info: { title: Arrays, version: 1.0.0 }
+paths:
+  /a:
+    get:
+      operationId: getA
+      parameters:
+        - name: ok
+          in: query
+          schema: { type: string }
+        - $ref: 'https://example.invalid/broken.yaml#/components/parameters/Bad'
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Kept' }
+components:
+  schemas:
+    Kept:
+      type: object
+      properties:
+        id: { type: string }

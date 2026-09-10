@@ -1,0 +1,60 @@
+/*
+ * Light Modern, ported. The counterpart to `theme-dark.css`; see the note there about why
+ * these are declared on `:root` and not a class.
+ *
+ * The chart colours deviate from VS Code's Light Modern on purpose. VS Code uses those
+ * values for charts — lines and areas — where a 4:1 ratio is acceptable; we use them for
+ * text, where AA demands 4.5:1. Light Modern's green, blue and orange measure 4.33, 3.59
+ * and 4.20 against white, so they are darkened here. `theme-parity.test.ts` enforces this
+ * and will fail if a lighter value creeps back in.
+ *
+ * This only applies outside a webview. Inside one, the user's own theme supplies these
+ * variables and its contrast is theirs to choose — overriding a user's theme to satisfy a
+ * checker would be the wrong trade.
+ *
+ * Every variable defined in the dark theme is defined here too. A variable present in only
+ * one theme is a bug that shows up as a fallback colour in the other — which is exactly the
+ * kind of thing the Storybook theme toggle exists to catch.
+ */
+
+:root[data-apibox-theme="light"] {
+  --vscode-foreground: #3b3b3b;
+  --vscode-descriptionForeground: #5f5f5f;
+  --vscode-editor-background: #ffffff;
+  --vscode-sideBar-background: #f8f8f8;
+  --vscode-editorWidget-background: #f8f8f8;
+  --vscode-input-background: #ffffff;
+  --vscode-input-border: #cecece;
+  --vscode-list-hoverBackground: #f2f2f2;
+  --vscode-list-activeSelectionBackground: #e4e6f1;
+  --vscode-list-activeSelectionForeground: #000000;
+  --vscode-textCodeBlock-background: #f3f3f3;
+
+  --vscode-panel-border: #e5e5e5;
+  --vscode-contrastBorder: #cecece;
+
+  --vscode-textLink-foreground: #005fb8;
+  --vscode-textLink-activeForeground: #004a92;
+  --vscode-focusBorder: #005fb8;
+  --vscode-button-background: #005fb8;
+  --vscode-button-hoverBackground: #0258a8;
+  --vscode-button-foreground: #ffffff;
+  --vscode-badge-background: #cccccc;
+  --vscode-badge-foreground: #3b3b3b;
+
+  --vscode-charts-foreground: #3b3b3b;
+  --vscode-charts-green: #1f7a1f;
+  --vscode-charts-yellow: #855d00;
+  --vscode-charts-red: #d02f2f;
+  --vscode-charts-blue: #0a5fc2;
+  --vscode-charts-orange: #8a4f12;
+  --vscode-charts-purple: #652d90;
+
+  --vscode-font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --vscode-editor-font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --vscode-font-size: 13px;
+  --vscode-font-weight: normal;
+  --vscode-editor-font-size: 12px;
+
+  color-scheme: light;
+}

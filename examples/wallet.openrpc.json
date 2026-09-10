@@ -1,0 +1,93 @@
+{
+  "openrpc": "1.2.6",
+  "info": {
+    "title": "Wallet RPC",
+    "version": "2.1.0",
+    "description": "A JSON-RPC 2.0 interface for querying balances and sending transfers."
+  },
+  "servers": [
+    { "name": "mainnet", "url": "https://rpc.example.com", "summary": "Production node" }
+  ],
+  "methods": [
+    {
+      "name": "getBalance",
+      "summary": "Get an account balance",
+      "description": "Returns the confirmed balance of an account, in the smallest unit.",
+      "tags": [{ "name": "accounts" }],
+      "params": [
+        {
+          "name": "address",
+          "description": "The account to query.",
+          "required": true,
+          "schema": { "type": "string", "pattern": "^0x[a-fA-F0-9]{40}$" }
+        },
+        {
+          "name": "block",
+          "description": "Block height, or the string 'latest'.",
+          "required": false,
+          "schema": {
+            "oneOf": [{ "type": "integer" }, { "type": "string", "enum": ["latest", "pending"] }]
+          }
+        }
+      ],
+      "result": {
+        "name": "balance",
+        "description": "The balance in the smallest unit.",
+        "schema": { "type": "string", "pattern": "^[0-9]+$" }
+      },
+      "errors": [{ "code": -32001, "message": "Unknown account" }],
+      "examples": [
+        {
+          "name": "A funded account",
+          "params": [{ "name": "address", "value": "0x0000000000000000000000000000000000000001" }],
+          "result": { "name": "balance", "value": "1250000000000000000" }
+        }
+      ]
+    },
+    {
+      "name": "sendTransfer",
+      "summary": "Send a transfer",
+      "description": "Submits a signed transfer to the network and returns its hash.",
+      "tags": [{ "name": "transfers" }],
+      "params": [
+        {
+          "name": "transaction",
+          "required": true,
+          "schema": { "$ref": "#/components/schemas/Transaction" }
+        }
+      ],
+      "result": {
+        "name": "hash",
+        "schema": { "type": "string", "description": "The transaction hash." }
+      },
+      "errors": [
+        { "code": -32002, "message": "Insufficient funds" },
+        { "code": -32003, "message": "Invalid signature" }
+      ]
+    },
+    {
+      "name": "subscribeBlocks",
+      "summary": "Subscribe to new blocks",
+      "description": "Opens a subscription that emits a notification for every new block.",
+      "tags": [{ "name": "subscriptions" }],
+      "params": [],
+      "result": { "name": "subscriptionId", "schema": { "type": "string" } }
+    }
+  ],
+  "components": {
+    "schemas": {
+      "Transaction": {
+        "type": "object",
+        "description": "A signed transfer.",
+        "required": ["from", "to", "value", "signature"],
+        "properties": {
+          "from": { "type": "string", "description": "Sender address." },
+          "to": { "type": "string", "description": "Recipient address." },
+          "value": { "type": "string", "description": "Amount in the smallest unit." },
+          "signature": { "type": "string", "description": "Hex-encoded signature." },
+          "memo": { "type": "string", "maxLength": 128 }
+        }
+      }
+    }
+  }
+}

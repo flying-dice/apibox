@@ -1,0 +1,22 @@
+asyncapi: 2.6.0
+info:
+  title: Legacy Streetlights
+  version: 1.0.0
+channels:
+  'light/{streetlightId}/measured':
+    parameters:
+      streetlightId:
+        description: The identifier of the streetlight.
+        schema:
+          type: string
+          pattern: '^[0-9]+$'
+    subscribe:
+      operationId: receiveMeasured
+      summary: Receive a measurement.
+      message:
+        name: lightMeasured
+        contentType: application/json
+        payload:
+          type: object
+          properties:
+            lumens: { type: integer }

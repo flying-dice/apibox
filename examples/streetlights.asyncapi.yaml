@@ -1,0 +1,69 @@
+asyncapi: 3.0.0
+info:
+  title: Streetlights
+  version: 1.0.0
+  description: |
+    A small event-driven API for a city's smart streetlights. Lights publish
+    telemetry; the city sends them commands.
+servers:
+  mosquitto:
+    host: test.mosquitto.org
+    protocol: mqtt
+    description: Public test broker.
+channels:
+  lightMeasured:
+    address: 'smartylighting/streetlights/1/0/event/{streetlightId}/lighting/measured'
+    title: Light measured
+    description: Telemetry published whenever a light takes a reading.
+    parameters:
+      streetlightId:
+        description: The identifier of the streetlight.
+    messages:
+      lightMeasured:
+        $ref: '#/components/messages/LightMeasured'
+  turnOn:
+    address: 'smartylighting/streetlights/1/0/action/{streetlightId}/turn/on'
+    title: Turn on
+    description: Command a streetlight to switch on.
+    parameters:
+      streetlightId:
+        description: The identifier of the streetlight.
+    messages:
+      turnOn:
+        $ref: '#/components/messages/TurnOnOff'
+operations:
+  receiveLightMeasurement:
+    action: receive
+    channel: { $ref: '#/channels/lightMeasured' }
+    summary: Receive a lighting measurement.
+  sendTurnOn:
+    action: send
+    channel: { $ref: '#/channels/turnOn' }
+    summary: Turn a streetlight on.
+components:
+  messages:
+    LightMeasured:
+      name: lightMeasured
+      title: Light measured
+      summary: Reports the current luminosity of a streetlight.
+      contentType: application/json
+      payload:
+        type: object
+        required: [lumens, sentAt]
+        properties:
+          lumens: { type: integer, minimum: 0, description: Current luminosity. }
+          sentAt: { type: string, format: date-time, description: When the reading was taken. }
+    TurnOnOff:
+      name: turnOnOff
+      title: Turn on or off
+      summary: Command a streetlight to change state.
+      contentType: application/json
+      payload:
+        type: object
+        required: [command]
+        properties:
+          command:
+            type: string
+            enum: [on, off]
+            description: Whether to turn the light on or off.
+          sentAt: { type: string, format: date-time }

@@ -1,0 +1,23 @@
+openapi: 3.1.0
+info: { title: Broken, version: 1.0.0 }
+paths:
+  /things:
+    get:
+      operationId: listThings
+      responses:
+        '200':
+          description: Things.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Thing' }
+        'x-internal':
+          description: Not a status code at all.
+components:
+  schemas:
+    Thing:
+      type: object
+      required: [id, external]
+      properties:
+        id: { type: string }
+        external:
+          $ref: 'https://example.invalid/nope.yaml#/components/schemas/Missing'
