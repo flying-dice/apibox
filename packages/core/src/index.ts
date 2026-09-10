@@ -1,11 +1,15 @@
 export type { DetectionResult } from './detect.js';
 export { detectFormat, UnsupportedDocumentError } from './detect.js';
+export { parseDocument } from './document.js';
 export type { LoadedSource } from './load.js';
-export { loadSource, parseDocument } from './load.js';
+export { loadSource } from './load.js';
+export { toManifestEntry } from './manifest.js';
 export type { ParseOptions } from './parse.js';
 export { loadApiDocument, parseApiDocument } from './parse.js';
 export type { NormaliseSchemaOptions } from './schema.js';
 export { normaliseSchema, schemaTypeLabel } from './schema.js';
+export { parseApiSource } from './source-document.js';
+export { sourceName } from './source-name.js';
 export type * from './types.js';
 export { asArray, asRecord, asString, slugify, uniqueId } from './utils.js';
 export { isApiDocument, isManifest } from './validate.js';

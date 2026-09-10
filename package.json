@@ -39,7 +39,7 @@
     "dev:cli": "bun packages/cli/src/dev.ts",
     "dev:extension": "bun run --filter apibox-vscode dev",
     "dev:core": "bun run --filter @apibox/core dev",
-    "e2e:build": "bun run build && bun run sync-viewer && bun run dev:cli -- build examples/petstore.yaml examples/streetlights.asyncapi.yaml examples/wallet.openrpc.json --out .e2e-site --title 'APIBox browser tests'",
+    "e2e:build": "bun run build && bun run sync-viewer && bun run dev:cli -- build examples/petstore.yaml examples/streetlights.asyncapi.yaml examples/wallet.openrpc.json --out .e2e-site --title 'APIBox browser tests' && cp -R packages/viewer/dist-pwa/. .e2e-site/",
     "e2e:serve": "bun run e2e:build && bun run --cwd packages/viewer preview -- --outDir ../../.e2e-site --host 127.0.0.1 --port 4173 --strictPort",
     "test:e2e": "playwright test",
     "test:unit": "bun run --filter '*' test",

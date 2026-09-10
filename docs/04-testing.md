@@ -8,6 +8,7 @@
 | `@apibox/ui` | Vitest + `@testing-library/svelte` | Rendering, interaction, both themes |
 | `@apibox/viewer` | Vitest | Routing, data sources |
 | `@apibox/cli` | Vitest | Output tree of a real build |
+| VS Code extension | VS Code Extension Host + Mocha | Activation, isolated examples workspace and webview document round trip |
 | End to end | Playwright | The CLI-generated site, all formats, viewer workflows, failure states and test-ID coverage |
 
 ## Query by `data-testid`, always
@@ -53,6 +54,7 @@ happy-path tests cover the cases that actually break renderers.
 bunx playwright install chromium # once per development machine
 bun run test:unit    # every package's Vitest suite
 bun run test:e2e     # build, serve and test the CLI-generated site
+bun run --cwd packages/extension test:vscode # run the extension in a real VS Code host
 bun run test         # unit and browser suites
 bun run typecheck
 bun run lint
@@ -62,6 +64,12 @@ The browser suite generates one static site from every example format through th
 CLI, serves that output locally, and runs against Chromium. It covers routing, document
 navigation, filtering, keyboard clearing, theme changes, deep links, copying, schema
 expansion, loading and invalid-data states, plus OpenAPI, AsyncAPI and JSON-RPC content.
+The PWA cases additionally cover creating and deleting workspaces, importing all three
+formats, partial import failure, persistence after refresh and reopening while offline.
+
+The extension integration suite downloads the pinned VS Code version into its ignored
+test cache, launches only APIBox against `examples/`, activates the extension, opens a
+custom preview and waits for the embedded viewer to request and receive a real document.
 
 ## Before a card enters Review
 

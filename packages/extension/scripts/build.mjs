@@ -1,3 +1,4 @@
+import { rm } from 'node:fs/promises';
 import { build, context } from 'esbuild';
 
 process.exitCode = await runBuild(process.argv.slice(2));
@@ -9,6 +10,10 @@ async function runBuild(buildArguments) {
     return 1;
   }
 
+  await Promise.all(
+    ['dist/extension.cjs', 'dist/extension.cjs.map'].map((path) => rm(path, { force: true })),
+  );
+
   const options = {
     entryPoints: ['src/extension.ts'],
     outfile: 'dist/extension.js',
@@ -17,6 +22,12 @@ async function runBuild(buildArguments) {
     platform: 'node',
     target: 'node20',
     external: ['vscode'],
+    // Prefer dependency ESM entries. Some UMD mains contain runtime-relative requires
+    // that cannot survive being folded into one extension bundle.
+    mainFields: ['module', 'main'],
+    banner: {
+      js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);",
+    },
     sourcemap: true,
   };
 

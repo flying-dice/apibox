@@ -6,7 +6,9 @@ dist/
 !packages/cli/dist/
 !packages/cli/dist/**
 dist-webview/
+dist-pwa/
 out/
+.vscode-test/
 storybook-static/
 *.vsix
 .DS_Store

@@ -6,6 +6,7 @@
       "**",
       "!**/dist",
       "!**/dist-webview",
+      "!**/dist-pwa",
       "!**/storybook-static",
       "!**/assets/viewer",
       "!**/media",

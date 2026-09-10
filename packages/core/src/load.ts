@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
-import { basename, extname } from 'node:path';
-import { parse as parseYaml } from 'yaml';
+import { basename } from 'node:path';
+import { parseDocument } from './document.js';
+import { sourceName } from './source-name.js';
 
 export interface LoadedSource {
   /** Absolute path or URL, used as the base for resolving relative `$ref`s. */
@@ -30,18 +31,6 @@ export async function loadSource(location: string): Promise<LoadedSource> {
  * YAML 1.2 is a superset of JSON, so one parser handles both. We try `JSON.parse` first
  * only because its errors are clearer for genuinely broken JSON.
  */
-export function parseDocument(text: string): unknown {
-  const trimmed = text.trimStart();
-  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-    try {
-      return JSON.parse(text);
-    } catch {
-      // Fall through: it may be YAML flow style, which JSON.parse rejects.
-    }
-  }
-  return parseYaml(text, { merge: true });
-}
-
 async function fetchText(url: string): Promise<string> {
   const response = await fetch(url);
   if (!response.ok) {
@@ -53,8 +42,5 @@ async function fetchText(url: string): Promise<string> {
 function deriveName(location: string): string {
   const withoutQuery = location.split(/[?#]/)[0] ?? location;
   const base = basename(withoutQuery);
-  const ext = extname(base);
-  const stem = ext ? base.slice(0, -ext.length) : base;
-  // `petstore.openapi.yaml` reads better as `petstore`.
-  return stem.replace(/\.(openapi|asyncapi|openrpc|jsonrpc|api|spec)$/i, '') || 'api';
+  return sourceName(base);
 }

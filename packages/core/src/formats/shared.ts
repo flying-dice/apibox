@@ -31,7 +31,8 @@ export async function dereferenceDocument(
   warnings: string[],
 ): Promise<Record<string, unknown>> {
   const parser = new $RefParser();
-  const base = location ?? `${process.cwd()}/`;
+  const processLike = (globalThis as { process?: { cwd?: () => string } }).process;
+  const base = location ?? (processLike?.cwd ? `${processLike.cwd()}/` : 'https://apibox.local/');
   try {
     const resolved = await parser.dereference(base, structuredClone(root) as never, {
       continueOnError: true,

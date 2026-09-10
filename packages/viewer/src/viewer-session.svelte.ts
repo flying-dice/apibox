@@ -81,7 +81,13 @@ export function createViewerSession(getDataSource: () => DataSource) {
     try {
       manifest = await dataSource.loadManifest();
       const resolvedRoute = canonicalRoute(route, router);
-      if (!resolvedRoute?.documentId) throw new Error('No API documents are available.');
+      if (!resolvedRoute?.documentId) {
+        currentDocument = undefined;
+        currentSection = undefined;
+        query = '';
+        loading = false;
+        return;
+      }
       await loadDocument(resolvedRoute.documentId, resolvedRoute.sectionId, events);
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'The documentation could not be loaded.';
@@ -124,5 +130,6 @@ export function createViewerSession(getDataSource: () => DataSource) {
       return error;
     },
     start,
+    reload: initialise,
   };
 }

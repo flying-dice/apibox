@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { detectFormat, UnsupportedDocumentError } from './detect.js';
-import { parseDocument } from './load.js';
+import { parseDocument } from './document.js';
 import { loadApiDocument, parseApiDocument } from './parse.js';
 import type { AsyncApiDocument, JsonRpcDocument, OpenApiDocument } from './types.js';
 

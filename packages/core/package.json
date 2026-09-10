@@ -5,6 +5,7 @@
   "main": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./browser": "./src/browser.ts",
     "./schema": "./src/schema.ts",
     "./utils": "./src/utils.ts",
     "./validate": "./src/validate.ts"

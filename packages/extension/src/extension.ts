@@ -37,13 +37,13 @@ class ApiPreviewProvider implements vscode.CustomTextEditorProvider {
   }
 }
 
-async function previewActiveDocument(): Promise<void> {
-  const document = vscode.window.activeTextEditor?.document;
-  if (!document) {
+async function previewActiveDocument(resource?: vscode.Uri): Promise<void> {
+  const uri = resource ?? vscode.window.activeTextEditor?.document.uri;
+  if (!uri) {
     void vscode.window.showWarningMessage('Open an API specification first.');
     return;
   }
-  await vscode.commands.executeCommand('vscode.openWith', document.uri, 'apibox.preview');
+  await vscode.commands.executeCommand('vscode.openWith', uri, 'apibox.preview');
 }
 
 async function buildStaticSite(context: vscode.ExtensionContext): Promise<void> {
@@ -117,14 +117,14 @@ async function scaffoldPagesWorkflow(): Promise<void> {
   if (action === 'Open Source Control') await vscode.commands.executeCommand('workbench.view.scm');
 }
 
-function registerCommand(
+function registerCommand<TArgs extends unknown[]>(
   id: string,
   errorContext: string,
-  command: () => Promise<void>,
+  command: (...args: TArgs) => Promise<void>,
 ): vscode.Disposable {
-  return vscode.commands.registerCommand(id, async () => {
+  return vscode.commands.registerCommand(id, async (...args: TArgs) => {
     try {
-      await command();
+      await command(...args);
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       await vscode.window.showErrorMessage(`${errorContext}: ${detail}`);

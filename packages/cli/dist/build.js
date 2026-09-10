@@ -1,10 +1,8 @@
 import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadApiDocument, uniqueId } from '@apibox/core';
+import { loadApiDocument, toManifestEntry, uniqueId } from '@apibox/core';
 import { expandInputs } from './inputs.js';
-const DEFAULT_ASSET_DIRECTORY = fileURLToPath(new URL('../assets/viewer', import.meta.url));
-const PACKAGE_JSON = fileURLToPath(new URL('../package.json', import.meta.url));
 const BASE_MARKER = '<!-- apibox:base -->';
 const TITLE_MARKER = '<!-- apibox:title -->';
 export async function buildSite(options) {
@@ -15,7 +13,7 @@ export async function buildSite(options) {
     const sources = await expandInputs(options.inputs, cwd);
     const documents = await loadDocuments(sources);
     const manifest = createManifest(documents, options.generator ?? (await generatorName()), options.title, options.generatedAt);
-    await cp(options.assetDir ?? DEFAULT_ASSET_DIRECTORY, outDir, {
+    await cp(options.assetDir ?? defaultAssetDirectory(), outDir, {
         recursive: true,
         force: true,
     });
@@ -41,14 +39,7 @@ function createManifest(documents, generator, title = 'API documentation', gener
         title,
         generatedAt,
         generator,
-        documents: documents.map((document) => ({
-            id: document.id,
-            kind: document.kind,
-            title: document.title,
-            version: document.version,
-            summary: document.summary,
-            path: `${document.id}.json`,
-        })),
+        documents: documents.map((document) => toManifestEntry(document)),
     };
 }
 async function writeJson(path, value) {
@@ -67,7 +58,7 @@ async function rewriteIndex(path, title, base) {
     await writeFile(path, rewritten, 'utf8');
 }
 async function generatorName() {
-    const packageJson = JSON.parse(await readFile(PACKAGE_JSON, 'utf8'));
+    const packageJson = JSON.parse(await readFile(packageJsonPath(), 'utf8'));
     if (typeof packageJson !== 'object' ||
         packageJson === null ||
         !('version' in packageJson) ||
@@ -75,6 +66,12 @@ async function generatorName() {
         throw new Error('The CLI package metadata does not contain a valid version.');
     }
     return `apibox/${packageJson.version}`;
+}
+function defaultAssetDirectory() {
+    return fileURLToPath(new URL('../assets/viewer', import.meta.url));
+}
+function packageJsonPath() {
+    return fileURLToPath(new URL('../package.json', import.meta.url));
 }
 function normaliseBase(base) {
     if (base === '' || base === '.')

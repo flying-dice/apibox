@@ -1,6 +1,6 @@
 # apibox — status
 
-**Updated:** 2026-09-10 21:02 UTC · **Branch:** `main` · **Working tree:** GitHub delivery pipelines added after initial commit
+**Updated:** 2026-09-10 21:10 UTC · **Branch:** `main` · **Working tree:** card 14 ready to publish
 
 ## Goal / health
 
@@ -8,15 +8,21 @@ Bootstrap a Bun workspace delivering API documentation three ways from one rende
 engine: a VS Code extension, a static site generator, and a GitHub Pages deploy — covering
 OpenAPI, AsyncAPI and JSON-RPC. See `docs/01-overview.md`.
 
-**Health: implementation complete; all 13 cards are in Review.** `@apibox/core` parses all three formats.
+**Health: all 14 cards are in Review.** `@apibox/core` parses all three formats.
 The UI foundations, OpenAPI renderer, shared browser/VS Code viewer shell, static-site CLI
 and extension are implementation-complete. The exact review gate passes clean typecheck,
-lint, 239 unit tests and 15 Playwright tests (254 total), with the browser suite rebuilding
+lint, 243 unit tests and 20 Playwright tests (263 total), with the browser suite rebuilding
 every workspace and exercising the CLI-generated static site. The VSIX also packages
 cleanly. Every runnable workspace surface has a documented development mode. The
 Antigravity review gate was removed at the user's direction.
 
 ## Now
+
+Card [14](boards/project-backlog/14-browser-workspaces-and-pwa.md) is in **Review**.
+GitHub Pages is a local-first installable PWA with versioned IndexedDB workspaces,
+multi-file import, partial-failure handling, confirmed deletion and offline reopening.
+Bundled examples remain immutable. VS Code development opens an isolated `examples/`
+Extension Host, and supported files expose native Explorer/editor context actions.
 
 Card [11](boards/project-backlog/11-github-pages-deploy-and-release.md) is in **Review**.
 The public package contains a bundled CLI and viewer with explicit runtime dependencies;
@@ -46,9 +52,7 @@ every browser-facing workflow and all three supported formats through real CLI o
 
 ## Next
 
-Create the first commit and push it to the selected GitLab project. Then run the literal
-`bunx github:flying-dice/apibox` command to verify GitHub transport against the pushed
-repository; the equivalent packed clean-consumer path is already green.
+Publish the Review-ready update to GitLab and GitHub, then collect human review.
 
 ## Later
 
@@ -72,7 +76,8 @@ repository; the equivalent packed clean-consumer path is already green.
 - Six decisions recorded in `decisions/`.
 - UI foundations, Storybook, atoms, molecules, SchemaViewer, all three renderers and the
   shared viewer shell, static-site CLI and VS Code extension are implemented; workspace
-  verification is green at 254 tests, all workspace targets build, and the VSIX packages.
+  verification is green at 263 standard-gate tests plus one real VS Code Extension Host
+  integration test; all workspace targets build, and the VSIX packages.
 - Full test-ID coverage is enforced from one shared policy at source and browser runtime;
   CI runs the same 239 unit and 15 Playwright scenarios as the local review gate.
 - Root release packaging is self-contained across workspace boundaries. A lifecycle-free
@@ -83,8 +88,4 @@ repository; the equivalent packed clean-consumer path is already green.
 
 **Unresolved:**
 
-- Literal `bunx github:flying-dice/apibox` transport cannot be exercised before the first
-  commit/push; the equivalent packed clean-consumer install is verified — see card 11.
-- The first local commit is ready; creating the GitLab destination requires an explicit
-  project-visibility choice.
-- The extension package is built but still needs human sign-off inside an Extension Host.
+- Human review/sign-off remains for all Review cards.

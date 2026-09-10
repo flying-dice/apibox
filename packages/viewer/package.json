@@ -8,8 +8,9 @@
     "./protocol": "./src/protocol.ts"
   },
   "scripts": {
-    "build": "bun run build:web && bun run build:webview",
+    "build": "bun run build:web && bun run build:pwa && bun run build:webview",
     "build:web": "vite build --outDir dist",
+    "build:pwa": "APIBOX_TARGET=pwa vite build --outDir dist-pwa",
     "build:webview": "APIBOX_TARGET=webview vite build --outDir dist-webview",
     "dev": "vite",
     "dev:webview": "APIBOX_TARGET=webview vite",

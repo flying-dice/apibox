@@ -56,10 +56,28 @@ class UnsupportedDocumentError extends Error {
     this.name = "UnsupportedDocumentError";
   }
 }
+// packages/core/src/document.ts
+import { parse as parseYaml } from "yaml";
+function parseDocument(text) {
+  const trimmed = text.trimStart();
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    try {
+      return JSON.parse(text);
+    } catch {}
+  }
+  return parseYaml(text, { merge: true });
+}
 // packages/core/src/load.ts
 import { readFile } from "fs/promises";
-import { basename, extname } from "path";
-import { parse as parseYaml } from "yaml";
+import { basename } from "path";
+
+// packages/core/src/source-name.ts
+function sourceName(fileName) {
+  const withoutExtension = fileName.replace(/\.[^.]+$/, "");
+  return withoutExtension.replace(/\.(openapi|asyncapi|openrpc|jsonrpc|api|spec)$/i, "") || "api";
+}
+
+// packages/core/src/load.ts
 async function loadSource(location) {
   const isUrl = /^https?:\/\//i.test(location);
   const text = isUrl ? await fetchText(location) : await readFile(location, "utf8");
@@ -71,15 +89,6 @@ async function loadSource(location) {
     throw new Error(`Could not parse ${location}: ${message}`, { cause: error });
   }
 }
-function parseDocument(text) {
-  const trimmed = text.trimStart();
-  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-    try {
-      return JSON.parse(text);
-    } catch {}
-  }
-  return parseYaml(text, { merge: true });
-}
 async function fetchText(url) {
   const response = await fetch(url);
   if (!response.ok) {
@@ -90,9 +99,18 @@ async function fetchText(url) {
 function deriveName(location) {
   const withoutQuery = location.split(/[?#]/)[0] ?? location;
   const base = basename(withoutQuery);
-  const ext = extname(base);
-  const stem = ext ? base.slice(0, -ext.length) : base;
-  return stem.replace(/\.(openapi|asyncapi|openrpc|jsonrpc|api|spec)$/i, "") || "api";
+  return sourceName(base);
+}
+// packages/core/src/manifest.ts
+function toManifestEntry(document, path = `${document.id}.json`) {
+  return {
+    id: document.id,
+    kind: document.kind,
+    title: document.title,
+    version: document.version,
+    summary: document.summary,
+    path
+  };
 }
 // packages/core/src/formats/asyncapi/index.ts
 import { Parser } from "@asyncapi/parser";
@@ -289,7 +307,8 @@ function toConstraints(schema) {
 import $RefParser from "@apidevtools/json-schema-ref-parser";
 async function dereferenceDocument(root, location, warnings) {
   const parser = new $RefParser;
-  const base = location ?? `${process.cwd()}/`;
+  const processLike = globalThis.process;
+  const base = location ?? (processLike?.cwd ? `${processLike.cwd()}/` : "https://apibox.local/");
   try {
     const resolved = await parser.dereference(base, structuredClone(root), {
       continueOnError: true,
@@ -1057,8 +1076,6 @@ async function expandGlob(input, cwd) {
 }
 
 // packages/cli/src/build.ts
-var DEFAULT_ASSET_DIRECTORY = fileURLToPath(new URL("../assets/viewer", import.meta.url));
-var PACKAGE_JSON = fileURLToPath(new URL("../package.json", import.meta.url));
 var BASE_MARKER = "<!-- apibox:base -->";
 var TITLE_MARKER = "<!-- apibox:title -->";
 async function buildSite(options) {
@@ -1069,7 +1086,7 @@ async function buildSite(options) {
   const sources = await expandInputs(options.inputs, cwd);
   const documents = await loadDocuments(sources);
   const manifest = createManifest(documents, options.generator ?? await generatorName(), options.title, options.generatedAt);
-  await cp(options.assetDir ?? DEFAULT_ASSET_DIRECTORY, outDir, {
+  await cp(options.assetDir ?? defaultAssetDirectory(), outDir, {
     recursive: true,
     force: true
   });
@@ -1095,14 +1112,7 @@ function createManifest(documents, generator, title = "API documentation", gener
     title,
     generatedAt,
     generator,
-    documents: documents.map((document) => ({
-      id: document.id,
-      kind: document.kind,
-      title: document.title,
-      version: document.version,
-      summary: document.summary,
-      path: `${document.id}.json`
-    }))
+    documents: documents.map((document) => toManifestEntry(document))
   };
 }
 async function writeJson(path, value) {
@@ -1120,11 +1130,17 @@ async function rewriteIndex(path, title, base) {
   await writeFile(path, rewritten, "utf8");
 }
 async function generatorName() {
-  const packageJson = JSON.parse(await readFile2(PACKAGE_JSON, "utf8"));
+  const packageJson = JSON.parse(await readFile2(packageJsonPath(), "utf8"));
   if (typeof packageJson !== "object" || packageJson === null || !("version" in packageJson) || typeof packageJson.version !== "string") {
     throw new Error("The CLI package metadata does not contain a valid version.");
   }
   return `apibox/${packageJson.version}`;
+}
+function defaultAssetDirectory() {
+  return fileURLToPath(new URL("../assets/viewer", import.meta.url));
+}
+function packageJsonPath() {
+  return fileURLToPath(new URL("../package.json", import.meta.url));
 }
 function normaliseBase(base) {
   if (base === "" || base === ".")

@@ -12,4 +12,5 @@ export { isHostToViewerMessage, isViewerToHostMessage } from './protocol.js';
 export type { HashRouter, ViewerRoute } from './router.js';
 export { createHashRouter, formatHash, parseHash } from './router.js';
 export { StaticDataSource } from './static-data-source.js';
+export { default as ViewerShell } from './ViewerShell.svelte';
 export { WebviewDataSource } from './webview-data-source.js';

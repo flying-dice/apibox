@@ -5,7 +5,10 @@
       "name": "Run APIBox Extension",
       "type": "extensionHost",
       "request": "launch",
-      "args": ["--extensionDevelopmentPath=${workspaceFolder}/packages/extension"],
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/extension",
+        "${workspaceFolder}/examples"
+      ],
       "outFiles": ["${workspaceFolder}/packages/extension/dist/**/*.js"],
       "preLaunchTask": "Develop APIBox Extension"
     }

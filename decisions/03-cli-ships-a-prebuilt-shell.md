@@ -25,8 +25,9 @@ because `prepare` cannot be relied upon to fire for a git dependency of a worksp
 ## Consequences
 
 - A CLI run is file I/O only: roughly a second, no toolchain, no network.
-- The same bundle is the VS Code webview and the static site. Only the `DataSource`
-  implementation differs, so the two hosts cannot visually drift apart.
+- The CLI ships the Inner App only. VS Code mounts that Inner App in its webview, while
+  the APIBox-owned Pages deployment wraps it in a separate PWA Outer App. The shared
+  renderer and navigation cannot visually drift between hosts.
 - No per-page HTML. The site needs JavaScript and is not indexable per operation. If SEO
   becomes a requirement, an optional prerender pass can emit real HTML per operation and
   hydrate the same bundle — the architecture leaves room for it.

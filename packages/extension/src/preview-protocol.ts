@@ -1,4 +1,5 @@
 import type { ApiDocument, Manifest } from '@apibox/core';
+import { toManifestEntry } from '@apibox/core';
 import type { HostToViewerMessage } from '@apibox/viewer/protocol';
 
 export function manifestMessage(document: ApiDocument): HostToViewerMessage {
@@ -7,16 +8,7 @@ export function manifestMessage(document: ApiDocument): HostToViewerMessage {
     title: document.title,
     generatedAt: new Date().toISOString(),
     generator: 'apibox-vscode',
-    documents: [
-      {
-        id: document.id,
-        kind: document.kind,
-        title: document.title,
-        version: document.version,
-        summary: document.summary,
-        path: `${document.id}.json`,
-      },
-    ],
+    documents: [toManifestEntry(document)],
   };
   return { type: 'apibox/manifest', manifest };
 }

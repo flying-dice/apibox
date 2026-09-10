@@ -11,7 +11,7 @@
     {
       "label": "Develop APIBox Extension",
       "type": "shell",
-      "command": "bun run dev:extension",
+      "command": "bun run --cwd packages/extension dev:watch",
       "isBackground": true,
       "problemMatcher": {
         "owner": "apibox-extension",

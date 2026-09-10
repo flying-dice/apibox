@@ -11,7 +11,7 @@
   },
   "type": "module",
   "engines": {
-    "vscode": "^1.137.0"
+    "vscode": "^1.136.0"
   },
   "main": "./dist/extension.js",
   "files": [
@@ -44,6 +44,22 @@
         "category": "APIBox"
       }
     ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "apibox.preview",
+          "when": "resourceExtname == .yaml || resourceExtname == .yml || resourceExtname == .json",
+          "group": "navigation@20"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "apibox.preview",
+          "when": "resourceExtname == .yaml || resourceExtname == .yml || resourceExtname == .json",
+          "group": "navigation@20"
+        }
+      ]
+    },
     "customEditors": [
       {
         "viewType": "apibox.preview",
@@ -65,11 +81,13 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "dev": "bun run --cwd ../viewer build:webview && bun run sync-assets && node scripts/build.mjs --watch",
+    "dev": "node scripts/dev.mjs",
+    "dev:watch": "bun run --cwd ../core build && bun run --cwd ../cli build && bun run --cwd ../viewer build:webview && bun run sync-assets && node scripts/build.mjs --watch",
     "sync-assets": "node scripts/sync-assets.mjs",
     "package": "bun run sync-assets && bun run build && vsce package --no-dependencies",
+    "test:vscode": "bun run build && tsc -p tsconfig.test.json && vscode-test",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run src"
+    "test": "vitest run src/*.test.ts"
   },
   "dependencies": {
     "@apibox/cli": "workspace:*",
@@ -78,9 +96,13 @@
   },
   "devDependencies": {
     "@types/node": "22.20.2",
-    "@types/vscode": "^1.137.0",
+    "@types/mocha": "^10.0.10",
+    "@types/vscode": "1.136.0",
     "@vscode/vsce": "^3.9.2",
+    "@vscode/test-cli": "^0.0.15",
+    "@vscode/test-electron": "^3.1.0",
     "esbuild": "^0.28.2",
+    "mocha": "^12.0.0",
     "typescript": "5.9.3",
     "vitest": "5.0.0"
   }

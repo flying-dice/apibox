@@ -2,11 +2,9 @@ import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { ApiDocument, Manifest } from '@apibox/core';
-import { loadApiDocument, uniqueId } from '@apibox/core';
+import { loadApiDocument, toManifestEntry, uniqueId } from '@apibox/core';
 import { expandInputs } from './inputs.js';
 
-const DEFAULT_ASSET_DIRECTORY = fileURLToPath(new URL('../assets/viewer', import.meta.url));
-const PACKAGE_JSON = fileURLToPath(new URL('../package.json', import.meta.url));
 const BASE_MARKER = '<!-- apibox:base -->';
 const TITLE_MARKER = '<!-- apibox:title -->';
 
@@ -39,7 +37,7 @@ export async function buildSite(options: BuildOptions): Promise<BuildResult> {
     options.generatedAt,
   );
 
-  await cp(options.assetDir ?? DEFAULT_ASSET_DIRECTORY, outDir, {
+  await cp(options.assetDir ?? defaultAssetDirectory(), outDir, {
     recursive: true,
     force: true,
   });
@@ -80,14 +78,7 @@ function createManifest(
     title,
     generatedAt,
     generator,
-    documents: documents.map((document) => ({
-      id: document.id,
-      kind: document.kind,
-      title: document.title,
-      version: document.version,
-      summary: document.summary,
-      path: `${document.id}.json`,
-    })),
+    documents: documents.map((document) => toManifestEntry(document)),
   };
 }
 
@@ -109,7 +100,7 @@ async function rewriteIndex(path: string, title: string, base: string): Promise<
 }
 
 async function generatorName(): Promise<string> {
-  const packageJson = JSON.parse(await readFile(PACKAGE_JSON, 'utf8')) as unknown;
+  const packageJson = JSON.parse(await readFile(packageJsonPath(), 'utf8')) as unknown;
   if (
     typeof packageJson !== 'object' ||
     packageJson === null ||
@@ -119,6 +110,14 @@ async function generatorName(): Promise<string> {
     throw new Error('The CLI package metadata does not contain a valid version.');
   }
   return `apibox/${packageJson.version}`;
+}
+
+function defaultAssetDirectory(): string {
+  return fileURLToPath(new URL('../assets/viewer', import.meta.url));
+}
+
+function packageJsonPath(): string {
+  return fileURLToPath(new URL('../package.json', import.meta.url));
 }
 
 function normaliseBase(base: string): string {
