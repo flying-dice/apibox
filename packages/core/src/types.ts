@@ -7,7 +7,7 @@
  * added later without reopening the UI.
  */
 
-export type FormatId = 'openapi' | 'asyncapi' | 'jsonrpc';
+export type FormatId = 'openapi' | 'asyncapi' | 'jsonrpc' | 'jsonschema';
 
 /* -------------------------------------------------------------------------- */
 /* Schemas                                                                     */
@@ -368,7 +368,27 @@ export interface JsonRpcDocument extends ApiDocumentBase {
   schemas: SchemaNode[];
 }
 
-export type ApiDocument = OpenApiDocument | AsyncApiDocument | JsonRpcDocument;
+/* -------------------------------------------------------------------------- */
+/* JSON Schema                                                                 */
+/* -------------------------------------------------------------------------- */
+
+export interface JsonSchemaDocument extends ApiDocumentBase {
+  kind: 'jsonschema';
+  /**
+   * The dialect the document declared via `$schema`, e.g. `2020-12` or `draft-07`.
+   * Detection requires `$schema` to be present (see `detect.ts`), so this is always a
+   * genuine document-declared version rather than a guess.
+   */
+  specVersion: string;
+  /** The root schema's `$id` (or draft-04 `id`), when declared. */
+  schemaId?: string;
+  /** The document's own root schema, when it described one directly. */
+  root?: SchemaNode;
+  /** Named entries from `$defs` (2019-09+) or `definitions` (draft-07 and earlier). */
+  schemas: SchemaNode[];
+}
+
+export type ApiDocument = OpenApiDocument | AsyncApiDocument | JsonRpcDocument | JsonSchemaDocument;
 
 /* -------------------------------------------------------------------------- */
 /* Site manifest                                                               */

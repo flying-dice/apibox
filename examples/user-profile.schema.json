@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://apibox.dev/schemas/user-profile.json",
+  "title": "User Profile",
+  "description": "A user's public profile.",
+  "type": "object",
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "displayName": { "type": "string" },
+    "address": { "$ref": "#/$defs/Address" }
+  },
+  "required": ["id", "displayName"],
+  "$defs": {
+    "Address": {
+      "type": "object",
+      "properties": {
+        "street": { "type": "string" },
+        "city": { "type": "string" }
+      }
+    }
+  }
+}

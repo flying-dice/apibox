@@ -4,12 +4,18 @@ import { describe, expect, it } from 'vitest';
 import { detectFormat, UnsupportedDocumentError } from './detect.js';
 import { parseDocument } from './document.js';
 import { loadApiDocument, parseApiDocument } from './parse.js';
-import type { AsyncApiDocument, JsonRpcDocument, OpenApiDocument } from './types.js';
+import type {
+  AsyncApiDocument,
+  JsonRpcDocument,
+  JsonSchemaDocument,
+  OpenApiDocument,
+} from './types.js';
 
 const examples = (name: string) =>
   fileURLToPath(new URL(`../../../examples/${name}`, import.meta.url));
 const fixtures = (name: string) =>
   fileURLToPath(new URL(`../test/fixtures/${name}`, import.meta.url));
+const repoRoot = (name: string) => fileURLToPath(new URL(`../../../${name}`, import.meta.url));
 
 describe('detectFormat', () => {
   it('identifies each format from its root version marker', () => {
@@ -30,6 +36,41 @@ describe('detectFormat', () => {
     expect(detectFormat('not an object')).toBeUndefined();
     expect(detectFormat(null)).toBeUndefined();
   });
+
+  it('recognises a JSON Schema dialect URI, tolerant of http/https and a trailing #', () => {
+    expect(detectFormat({ $schema: 'https://json-schema.org/draft/2020-12/schema' })).toEqual({
+      format: 'jsonschema',
+      specVersion: '2020-12',
+    });
+    expect(detectFormat({ $schema: 'https://json-schema.org/draft/2019-09/schema#' })).toEqual({
+      format: 'jsonschema',
+      specVersion: '2019-09',
+    });
+    expect(detectFormat({ $schema: 'http://json-schema.org/draft-07/schema#' })).toEqual({
+      format: 'jsonschema',
+      specVersion: 'draft-07',
+    });
+    expect(detectFormat({ $schema: 'http://json-schema.org/draft-06/schema#' })?.specVersion).toBe(
+      'draft-06',
+    );
+    expect(detectFormat({ $schema: 'http://json-schema.org/draft-04/schema#' })?.specVersion).toBe(
+      'draft-04',
+    );
+  });
+
+  it('does not detect JSON Schema from an unrecognised or absent $schema', () => {
+    // The whole point: every JSON object is technically a valid schema, so nothing short
+    // of a recognised dialect URI (or an explicit format) may trigger detection.
+    expect(detectFormat({ $schema: 'https://json.schemastore.org/tsconfig' })).toBeUndefined();
+    expect(detectFormat({ type: 'object', properties: {} })).toBeUndefined();
+  });
+
+  it('lets an explicit hint force jsonschema even without $schema', () => {
+    expect(detectFormat({ type: 'string' }, { format: 'jsonschema' })).toEqual({
+      format: 'jsonschema',
+      specVersion: '',
+    });
+  });
 });
 
 describe('parseApiDocument', () => {
@@ -40,6 +81,169 @@ describe('parseApiDocument', () => {
   it('rejects Swagger 2.0 with an actionable message', async () => {
     const raw = JSON.parse(await readFile(fixtures('swagger2.json'), 'utf8'));
     await expect(parseApiDocument(raw)).rejects.toThrow(/Swagger 2\.0.*swagger2openapi/s);
+  });
+
+  describe('false-positive corpus', () => {
+    // The single most important test in the JSON Schema feature: every one of these is a
+    // real, valid JSON object with no `$schema`, and none of them may be mistaken for a
+    // published JSON Schema document. If this test fails, `apibox build '**/*.json'` can
+    // turn a `package.json` into a documentation page.
+    it.each([
+      ['package.json', 'package.json'],
+      ['tsconfig.base.json', 'tsconfig.base.json'],
+      ['biome.json', 'biome.json'],
+    ])('rejects %s', async (_label, file) => {
+      const raw = JSON.parse(await readFile(repoRoot(file), 'utf8'));
+      await expect(parseApiDocument(raw)).rejects.toThrow(UnsupportedDocumentError);
+    });
+
+    it('rejects a GitHub Actions workflow', async () => {
+      const text = await readFile(repoRoot('.github/workflows/ci.yml'), 'utf8');
+      const raw = parseDocument(text);
+      await expect(parseApiDocument(raw)).rejects.toThrow(UnsupportedDocumentError);
+    });
+  });
+});
+
+describe('JSON Schema', () => {
+  it('parses a 2020-12 document: root, named $defs, and a resolved internal $ref', async () => {
+    const doc = (await loadApiDocument(examples('user-profile.schema.json'))) as JsonSchemaDocument;
+
+    expect(doc.kind).toBe('jsonschema');
+    expect(doc.specVersion).toBe('2020-12');
+    expect(doc.version).toBe('2020-12');
+    expect(doc.title).toBe('User Profile');
+    expect(doc.schemaId).toBe('https://apibox.dev/schemas/user-profile.json');
+    expect(doc.warnings).toEqual([]);
+
+    expect(doc.root?.types).toEqual(['object']);
+    expect(doc.root?.properties?.map((p) => p.name)).toEqual(['id', 'displayName', 'address']);
+    expect(doc.root?.properties?.find((p) => p.name === 'address')?.refName).toBe('Address');
+
+    expect(doc.schemas.map((s) => s.name)).toEqual(['Address']);
+  });
+
+  it('parses a draft-07 document: root and named `definitions`', async () => {
+    const doc = (await loadApiDocument(
+      fixtures('widget-draft07.schema.json'),
+    )) as JsonSchemaDocument;
+
+    expect(doc.specVersion).toBe('draft-07');
+    expect(doc.version).toBe('draft-07');
+    expect(doc.root?.properties?.map((p) => p.name)).toEqual(['name', 'color']);
+    expect(doc.root?.properties?.find((p) => p.name === 'color')?.refName).toBe('Color');
+    expect(doc.schemas.map((s) => s.name)).toEqual(['Color']);
+  });
+
+  it('parses draft-04, reading its array-form tuple items and `id` keyword', async () => {
+    const doc = (await parseApiDocument({
+      $schema: 'http://json-schema.org/draft-04/schema#',
+      id: 'https://apibox.dev/schemas/legacy.json',
+      title: 'Legacy',
+      type: 'array',
+      items: [{ type: 'string' }, { type: 'number' }],
+    })) as JsonSchemaDocument;
+
+    expect(doc.specVersion).toBe('draft-04');
+    expect(doc.schemaId).toBe('https://apibox.dev/schemas/legacy.json');
+    expect(doc.root?.tupleItems?.map((i) => i.types)).toEqual([['string'], ['number']]);
+  });
+
+  it('warns and defaults the dialect for an unrecognised $schema', async () => {
+    const doc = (await parseApiDocument(
+      { $schema: 'https://example.com/my-custom-dialect', type: 'string' },
+      { format: 'jsonschema' },
+    )) as JsonSchemaDocument;
+
+    expect(doc.specVersion).toBe('2020-12');
+    expect(doc.warnings).toContainEqual(expect.stringMatching(/Unrecognised \$schema dialect/));
+  });
+
+  it('warns and defaults the dialect when $schema is absent, given an explicit format', async () => {
+    const doc = (await parseApiDocument(
+      { type: 'object', properties: { a: { type: 'string' } } },
+      { format: 'jsonschema' },
+    )) as JsonSchemaDocument;
+
+    expect(doc.specVersion).toBe('2020-12');
+    expect(doc.warnings).toContainEqual(expect.stringMatching(/No \$schema dialect declared/));
+    expect(doc.root?.properties?.map((p) => p.name)).toEqual(['a']);
+  });
+
+  it('warns when a document has neither a root schema nor any $defs/definitions', async () => {
+    const doc = (await parseApiDocument({
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+    })) as JsonSchemaDocument;
+
+    expect(doc.root).toBeUndefined();
+    expect(doc.schemas).toEqual([]);
+    expect(doc.warnings).toContainEqual(
+      expect.stringMatching(/neither a root schema nor any \$defs\/definitions/),
+    );
+  });
+
+  it('rejects a document with an unrecognised dialect and no explicit format', async () => {
+    await expect(
+      parseApiDocument({ $schema: 'https://example.com/my-custom-dialect', type: 'string' }),
+    ).rejects.toThrow(UnsupportedDocumentError);
+  });
+
+  describe('root description promotion', () => {
+    it('promotes an object root description to the document, and strips it off the root node', async () => {
+      const doc = (await loadApiDocument(
+        examples('user-profile.schema.json'),
+      )) as JsonSchemaDocument;
+
+      expect(doc.description).toBe("A user's public profile.");
+      expect(doc.root?.description).toBeUndefined();
+    });
+
+    it('still surfaces a oneOf composition root, description promoted or not', async () => {
+      const doc = (await parseApiDocument(
+        {
+          $schema: 'https://json-schema.org/draft/2020-12/schema',
+          description: 'One of two shapes.',
+          oneOf: [{ type: 'string' }, { type: 'number' }],
+        },
+        { format: 'jsonschema' },
+      )) as JsonSchemaDocument;
+
+      expect(doc.description).toBe('One of two shapes.');
+      expect(doc.root?.description).toBeUndefined();
+      expect(doc.root?.compositions?.[0]?.kind).toBe('oneOf');
+    });
+
+    it('still surfaces a non-object scalar root, description promoted or not', async () => {
+      const doc = (await parseApiDocument(
+        {
+          $schema: 'https://json-schema.org/draft/2020-12/schema',
+          description: 'A colour name.',
+          type: 'string',
+          enum: ['red', 'green', 'blue'],
+        },
+        { format: 'jsonschema' },
+      )) as JsonSchemaDocument;
+
+      expect(doc.description).toBe('A colour name.');
+      expect(doc.root?.description).toBeUndefined();
+      expect(doc.root?.types).toEqual(['string']);
+      expect(doc.root?.enum).toEqual(['red', 'green', 'blue']);
+    });
+
+    it('leaves the root node description alone when the document has none to promote', async () => {
+      const doc = (await parseApiDocument(
+        {
+          $schema: 'https://json-schema.org/draft/2020-12/schema',
+          type: 'object',
+          properties: { a: { type: 'string', description: 'A property description.' } },
+        },
+        { format: 'jsonschema' },
+      )) as JsonSchemaDocument;
+
+      expect(doc.description).toBeUndefined();
+      expect(doc.root?.description).toBeUndefined();
+      expect(doc.root?.properties?.[0]?.description).toBe('A property description.');
+    });
   });
 });
 

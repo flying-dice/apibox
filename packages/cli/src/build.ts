@@ -1,7 +1,7 @@
 import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { ApiDocument, Manifest } from '@apibox/core';
+import type { ApiDocument, FormatId, Manifest } from '@apibox/core';
 import { loadApiDocument, toManifestEntry, uniqueId } from '@apibox/core';
 import { expandInputs } from './inputs.js';
 
@@ -13,6 +13,12 @@ export interface BuildOptions {
   outDir: string;
   title?: string;
   base?: string;
+  /**
+   * Force the format for every input, rather than relying on detection. This is the
+   * `--format` CLI flag — the only way to build a JSON Schema document that omits
+   * `$schema` (decisions/08-json-schema-as-fourth-format.md).
+   */
+  format?: FormatId;
   cwd?: string;
   assetDir?: string;
   generatedAt?: string;
@@ -29,7 +35,7 @@ export async function buildSite(options: BuildOptions): Promise<BuildResult> {
   const cwd = options.cwd ?? process.cwd();
   const outDir = resolve(cwd, options.outDir);
   const sources = await expandInputs(options.inputs, cwd);
-  const documents = await loadDocuments(sources);
+  const documents = await loadDocuments(sources, options.format);
   const manifest = createManifest(
     documents,
     options.generator ?? (await generatorName()),
@@ -56,11 +62,11 @@ export async function buildSite(options: BuildOptions): Promise<BuildResult> {
   return { outDir, manifest };
 }
 
-async function loadDocuments(sources: string[]): Promise<ApiDocument[]> {
+async function loadDocuments(sources: string[], format?: FormatId): Promise<ApiDocument[]> {
   const takenIds = new Set<string>();
   const documents: ApiDocument[] = [];
   for (const source of sources) {
-    const document = await loadApiDocument(source);
+    const document = await loadApiDocument(source, { format });
     const id = uniqueId(document.id, takenIds);
     documents.push(id === document.id ? document : { ...document, id });
   }

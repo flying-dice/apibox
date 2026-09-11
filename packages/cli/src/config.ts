@@ -1,12 +1,16 @@
 import { access } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import type { FormatId } from '@apibox/core';
+import { FORMAT_IDS } from './format.js';
 
 export interface ApiBoxConfig {
   readonly inputs: readonly string[];
   readonly out: string;
   readonly title?: string;
   readonly base?: string;
+  /** Force the format for every input — see `ApiBoxConfig` consumers for the CLI `--format` flag. */
+  readonly format?: FormatId;
 }
 
 const CONFIG_FILENAMES = [
@@ -49,7 +53,10 @@ function isConfig(value: unknown): value is ApiBoxConfig {
     'out' in value &&
     typeof value.out === 'string' &&
     (!('title' in value) || value.title === undefined || typeof value.title === 'string') &&
-    (!('base' in value) || value.base === undefined || typeof value.base === 'string')
+    (!('base' in value) || value.base === undefined || typeof value.base === 'string') &&
+    (!('format' in value) ||
+      value.format === undefined ||
+      FORMAT_IDS.includes(value.format as FormatId))
   );
 }
 

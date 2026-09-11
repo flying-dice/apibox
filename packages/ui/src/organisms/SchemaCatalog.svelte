@@ -1,14 +1,17 @@
 <script lang="ts">
   import type { NavNode, SchemaNode } from '@apibox/core';
+  import CollapsibleCard from '../molecules/CollapsibleCard.svelte';
   import SchemaViewer from './SchemaViewer.svelte';
 
   interface Props {
     schemas: readonly SchemaNode[];
     navigation?: NavNode;
+    /** Section heading — overridable where "Schemas" is the wrong noun, e.g. JSON Schema's own $defs/definitions. */
+    title?: string;
     testId?: string;
   }
 
-  const { schemas, navigation, testId = 'schema-catalog' }: Props = $props();
+  const { schemas, navigation, title = 'Schemas', testId = 'schema-catalog' }: Props = $props();
 </script>
 
 {#if schemas.length > 0}
@@ -18,41 +21,32 @@
     aria-labelledby="{testId}-title"
     data-testid={testId}
   >
-    <h2 id="{testId}-title">Schemas</h2>
+    <h2 id="{testId}-title" data-testid="{testId}-title">{title}</h2>
     {#each schemas as schema, index (index)}
-      <article
+      <CollapsibleCard
         id={navigation?.children?.[index]?.id ?? `schema-${index}`}
-        class="schema"
-        data-testid="{testId}-{index}"
+        testId="{testId}-{index}"
       >
-        <h3>{schema.name ?? schema.title ?? `Schema ${index + 1}`}</h3>
+        {#snippet summary()}
+          <span>{schema.name ?? schema.title ?? `Schema ${index + 1}`}</span>
+        {/snippet}
         <SchemaViewer {schema} testId="{testId}-{index}-viewer" />
-      </article>
+      </CollapsibleCard>
     {/each}
   </section>
 {/if}
 
 <style>
-  .schemas,
-  .schema {
+  /* No gap between rows: the hairline in CollapsibleCard carries the separation. */
+  .schemas {
     display: flex;
     flex-direction: column;
-    gap: var(--apibox-space-5);
-  }
-
-  .schemas {
+    gap: 0;
     padding-top: var(--apibox-space-5);
     border-top: 1px solid var(--apibox-border);
   }
 
-  .schema {
-    padding: var(--apibox-space-4);
-    border: 1px solid var(--apibox-border);
-    border-radius: var(--apibox-radius-lg);
-  }
-
-  h2,
-  h3 {
-    margin: 0;
+  h2 {
+    margin: 0 0 var(--apibox-space-4);
   }
 </style>

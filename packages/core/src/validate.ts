@@ -1,6 +1,6 @@
 import type { ApiDocument, FormatId, Manifest } from './types.js';
 
-const FORMATS = new Set<FormatId>(['openapi', 'asyncapi', 'jsonrpc']);
+const FORMATS = new Set<FormatId>(['openapi', 'asyncapi', 'jsonrpc', 'jsonschema']);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -459,6 +459,11 @@ export function isApiDocument(value: unknown, expectedId?: string): value is Api
         Array.isArray(value.methods) &&
         hasUniqueIds(value.methods) &&
         value.methods.every(isRpcMethod)
+      );
+    case 'jsonschema':
+      return (
+        (value.root === undefined || isSchema(value.root)) &&
+        (value.schemaId === undefined || isString(value.schemaId))
       );
     default:
       return false;

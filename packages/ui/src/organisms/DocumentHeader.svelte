@@ -4,18 +4,28 @@
   import Link from '../atoms/Link.svelte';
   import KeyValueRow from '../molecules/KeyValueRow.svelte';
 
+  /** Display labels for the kind badge — the raw `ApiDocument['kind']` values are internal identifiers, not reader-facing copy. */
+  const KIND_LABELS: Record<ApiDocumentBase['kind'], string> = {
+    openapi: 'OpenAPI',
+    asyncapi: 'AsyncAPI',
+    jsonrpc: 'JSON-RPC',
+    jsonschema: 'JSON Schema',
+  };
+
   interface Props {
     document: ApiDocumentBase;
     specVersion?: string;
+    /** Label for the "Version" metadata row, overridable where the version means something else (e.g. a JSON Schema dialect). */
+    versionLabel?: string;
     testId?: string;
   }
 
-  const { document, specVersion, testId = 'document-header' }: Props = $props();
+  const { document, specVersion, versionLabel = 'Version', testId = 'document-header' }: Props = $props();
 </script>
 
 <header class="header" data-testid={testId}>
   <div class="eyebrow">
-    <Badge tone="info" variant="outline" testId="{testId}-kind">{document.kind}</Badge>
+    <Badge tone="info" variant="outline" testId="{testId}-kind">{KIND_LABELS[document.kind]}</Badge>
     {#if specVersion}<span data-testid="{testId}-spec-version">{specVersion}</span>{/if}
   </div>
   <h1 data-testid="{testId}-title">{document.title}</h1>
@@ -25,7 +35,7 @@
   {/if}
 
   <dl class="metadata" data-testid="{testId}-metadata">
-    <KeyValueRow label="Version" testId="{testId}-version">{document.version}</KeyValueRow>
+    <KeyValueRow label={versionLabel} testId="{testId}-version">{document.version}</KeyValueRow>
     {#if document.contact}
       <KeyValueRow label="Contact" testId="{testId}-contact">
         {#if document.contact.url}

@@ -1,10 +1,12 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
+import type { FormatId } from '@apibox/core';
 import { buildSite } from './build.js';
 import { loadConfig } from './config.js';
+import { FORMAT_IDS, parseFormat } from './format.js';
 
 const HELP = `Usage:
-  apibox build <inputs...> [--out ./site] [--title "API docs"] [--base ./]
+  apibox build <inputs...> [--out ./site] [--title "API docs"] [--base ./] [--format <${FORMAT_IDS.join('|')}>] [--asset-dir ./shell]
   apibox init [path]
 `;
 
@@ -47,6 +49,8 @@ async function runBuild(args: readonly string[], io: CliIo, cwd: string): Promis
     outDir: parsed.outDir ?? config?.out ?? './site',
     title: parsed.title ?? config?.title,
     base: parsed.base ?? config?.base,
+    format: parsed.format ?? config?.format,
+    assetDir: parsed.assetDir,
   });
   io.stdout(`Built ${result.manifest.documents.length} document(s) in ${result.outDir}`);
   return 0;
@@ -70,11 +74,15 @@ function parseBuildArguments(args: readonly string[]): {
   outDir?: string;
   title?: string;
   base?: string;
+  format?: FormatId;
+  assetDir?: string;
 } {
   const inputs: string[] = [];
   let outDir: string | undefined;
   let title: string | undefined;
   let base: string | undefined;
+  let format: FormatId | undefined;
+  let assetDir: string | undefined;
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (argument === undefined) break;
@@ -83,7 +91,7 @@ function parseBuildArguments(args: readonly string[]): {
       continue;
     }
     const [flag, inlineValue] = argument.split('=', 2);
-    if (!['--out', '--title', '--base'].includes(flag ?? '')) {
+    if (!['--out', '--title', '--base', '--format', '--asset-dir'].includes(flag ?? '')) {
       throw new Error(`Unknown option: ${flag}`);
     }
     const value = inlineValue ?? args[++index];
@@ -91,6 +99,12 @@ function parseBuildArguments(args: readonly string[]): {
     if (flag === '--out') outDir = value;
     if (flag === '--title') title = value;
     if (flag === '--base') base = value;
+    if (flag === '--format') format = parseFormat(value);
+    // Builds the site around a shell other than the one shipped in `assets/viewer`. The
+    // published CLI never needs this — see decisions/03-cli-ships-a-prebuilt-shell.md — but
+    // developing the viewer does, because the shipped shell is a committed build artefact
+    // that a working copy of the UI has already moved past.
+    if (flag === '--asset-dir') assetDir = value;
   }
-  return { inputs, outDir, title, base };
+  return { inputs, outDir, title, base, format, assetDir };
 }

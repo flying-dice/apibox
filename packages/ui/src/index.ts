@@ -29,6 +29,7 @@ export { badgeTone, methodTone, toneToken } from './atoms/tone.js';
 
 /* -- Molecules ------------------------------------------------------------- */
 export { default as CodeBlock } from './molecules/CodeBlock.svelte';
+export { default as CollapsibleCard } from './molecules/CollapsibleCard.svelte';
 export { default as KeyValueRow } from './molecules/KeyValueRow.svelte';
 export { default as NavItem } from './molecules/NavItem.svelte';
 export { default as PropertyRow } from './molecules/PropertyRow.svelte';
@@ -50,6 +51,7 @@ export { default as ServerList } from './organisms/ServerList.svelte';
 /* -- Renderers ------------------------------------------------------------- */
 export { default as AsyncApiDocument } from './renderers/asyncapi/AsyncApiDocument.svelte';
 export { default as JsonRpcDocument } from './renderers/jsonrpc/JsonRpcDocument.svelte';
+export { default as JsonSchemaDocument } from './renderers/jsonschema/JsonSchemaDocument.svelte';
 export { default as OpenApiDocument } from './renderers/openapi/OpenApiDocument.svelte';
 
 /* -- Templates ------------------------------------------------------------- */

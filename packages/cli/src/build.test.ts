@@ -21,6 +21,45 @@ afterEach(async () => {
   );
 });
 
+describe('--asset-dir', () => {
+  it('builds the site around a shell other than the committed one', async () => {
+    // The dev entry (packages/cli/src/dev.ts) relies on this flag to point a build at a
+    // freshly built viewer, because the shell committed to assets/viewer is a CI-written
+    // artefact that lags behind any local UI change. If this stops being honoured, a
+    // developer's own change silently stops appearing in the site they generate.
+    const shell = await temporaryDirectory();
+    const output = await temporaryDirectory();
+    await writeFile(
+      join(shell, 'index.html'),
+      '<!doctype html><html><head><!-- apibox:base --><title><!-- apibox:title -->apibox</title></head><body><p>custom shell</p></body></html>',
+      'utf8',
+    );
+
+    const io = { stdout: vi.fn(), stderr: vi.fn() };
+    const code = await runCli(
+      ['build', 'examples/petstore.yaml', '--out', output, '--asset-dir', shell],
+      io,
+      repositoryRoot,
+    );
+
+    expect(code).toBe(0);
+    expect(io.stderr).not.toHaveBeenCalled();
+    await expect(readFile(join(output, 'index.html'), 'utf8')).resolves.toContain('custom shell');
+  });
+
+  it('rejects an unknown option rather than silently ignoring it', async () => {
+    const io = { stdout: vi.fn(), stderr: vi.fn() };
+    const code = await runCli(
+      ['build', 'examples/petstore.yaml', '--asset-dirr', './x'],
+      io,
+      repositoryRoot,
+    );
+
+    expect(code).toBe(1);
+    expect(io.stderr).toHaveBeenCalledWith(expect.stringContaining('Unknown option'));
+  });
+});
+
 describe('buildSite', () => {
   it('builds all example formats from file and glob inputs', async () => {
     const output = await temporaryDirectory();

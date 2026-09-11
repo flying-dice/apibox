@@ -2,7 +2,7 @@
   "name": "apibox",
   "version": "0.1.0",
   "private": false,
-  "description": "Render OpenAPI, AsyncAPI and JSON-RPC documentation natively in VS Code, and publish it as a static site.",
+  "description": "Render OpenAPI, AsyncAPI, JSON-RPC and JSON Schema documentation natively in VS Code, and publish it as a static site.",
   "license": "MIT",
   "repository": {
     "type": "git",

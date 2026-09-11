@@ -1,5 +1,5 @@
-export type { DetectionResult } from './detect.js';
-export { detectFormat, UnsupportedDocumentError } from './detect.js';
+export type { DetectionHints, DetectionResult } from './detect.js';
+export { detectFormat, jsonSchemaDialect, UnsupportedDocumentError } from './detect.js';
 export { parseDocument } from './document.js';
 export type { LoadedSource } from './load.js';
 export { loadSource } from './load.js';
