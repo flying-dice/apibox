@@ -114,6 +114,25 @@ them ever reaches `@apibox/core`'s output model (`packages/core/src/types.ts`).
 
 ## Gaps
 
+> **Status as of 2026-09-12 — this section is largely historical.** Cards 15, 16, 17 and 23
+> have since closed most of what follows. Parameter serialisation and `discriminator` (gap 1,
+> 2), response `links`, operation `callbacks` and multipart `encoding` (gaps 3, 4), `x-*`
+> extensions and the JSON Schema applicator keywords (gaps 5, 8), the 3.2 constructs (gap 6)
+> and the `xml` object (gap 9) are all now parsed and rendered.
+>
+> **Gap 7 was factually wrong** and is retained only so the correction is visible. It claimed
+> reference-level `summary`/`description` overrides were lost during dereferencing. They are
+> not: `@apidevtools/json-schema-ref-parser` v16 implements extended references, merging a
+> `$ref`'s sibling keys into a fresh copy of the target, with each use site getting its own
+> object so overrides cannot leak between uses. This was established empirically while
+> building a fix that turned out to be unnecessary — and actively harmful, since
+> double-processing the merge desynchronises object identity for self-referential schemas.
+> The custom layer was reverted and tests now pin the native behaviour instead.
+>
+> The matrix above also understates current parse coverage for the same reason. Re-audit
+> before citing its numbers.
+
+
 1. **Parameter `style`/`explode`/`allowReserved`/`allowEmptyValue` are never parsed.**
    User-visible impact: a reader cannot tell whether an array/object query parameter is
    serialized as `form`/`spaceDelimited`/`pipeDelimited`/`deepObject`, which matters for

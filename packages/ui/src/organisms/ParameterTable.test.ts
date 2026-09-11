@@ -20,6 +20,13 @@ describe('ParameterTable', () => {
     expect(screen.queryByTestId('parameters')).not.toBeInTheDocument();
   });
 
+  it('groups a 3.2 querystring parameter under its own location', () => {
+    render(ParameterTable, {
+      parameters: [parameter({ name: 'raw', in: 'querystring', schema: { types: ['string'] } })],
+    });
+    expect(screen.getByTestId('parameters-querystring-0-name')).toHaveTextContent('raw');
+  });
+
   it('omits the serialisation chips for an undeclared scalar parameter', () => {
     // style/explode never change a scalar's wire shape, and the document said nothing —
     // showing them would be noise, not information.

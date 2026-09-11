@@ -354,6 +354,9 @@ function walk(raw, name, required, frame) {
   if (extensionEntries.length > 0) {
     node.extensions = extensionEntries.map(([key, value]) => ({ key, value }));
   }
+  const xml = toXml(schema.xml);
+  if (xml)
+    node.xml = xml;
   const discriminator = asRecord(schema.discriminator);
   const propertyName = asString(discriminator?.propertyName);
   if (discriminator && propertyName) {
@@ -389,6 +392,21 @@ function resolveDiscriminatorTarget(target, names) {
       return name;
   }
   return;
+}
+function toXml(raw) {
+  const xml = asRecord(raw);
+  if (!xml)
+    return;
+  const info = {
+    name: asString(xml.name),
+    namespace: asString(xml.namespace),
+    prefix: asString(xml.prefix),
+    attribute: xml.attribute === true ? true : undefined,
+    wrapped: xml.wrapped === true ? true : undefined,
+    nodeType: asString(xml.nodeType)
+  };
+  const hasAny = Object.values(info).some((value) => value !== undefined);
+  return hasAny ? info : undefined;
 }
 function toTypes(schema) {
   const type = schema.type;
@@ -1254,6 +1272,7 @@ async function parseOpenApi(raw, options = {}) {
     operations,
     schemas,
     jsonSchemaDialect: declaredDialect,
+    selfUrl: asString(dereferenced.$self),
     nav: buildNav4(operations, tags, schemas),
     warnings
   };
@@ -1262,7 +1281,9 @@ function parseTags(raw) {
   return asArray(raw).map((entry) => asRecord(entry)).filter((entry) => Boolean(entry && asString(entry.name))).map((entry) => ({
     name: asString(entry.name),
     description: asString(entry.description),
-    externalDocs: parseExternalDocs(entry.externalDocs)
+    externalDocs: parseExternalDocs(entry.externalDocs),
+    parent: asString(entry.parent),
+    kind: asString(entry.kind)
   }));
 }
 function parseServers2(raw) {
@@ -1325,7 +1346,8 @@ function parseSecuritySchemes(root) {
           scopes: Object.entries(scopes).map(([scopeName, description]) => ({
             name: scopeName,
             description: asString(description)
-          }))
+          })),
+          oauth2MetadataUrl: asString(flow.oauth2Metadata)
         };
       }) : undefined
     };
@@ -1354,15 +1376,12 @@ function parsePathItemOperations(pathItem, names, documentServers, warnings, pat
   const sharedParameters = parseParameters(pathItem.parameters, names);
   const pathServers = parseServers2(pathItem.servers);
   const operations = [];
-  for (const method of METHODS) {
-    const operationValue = asRecord(pathItem[method]);
-    if (!operationValue)
-      continue;
+  const buildOperation = (method, operationValue) => {
     const operationId = asString(operationValue.operationId);
     const id = uniqueId(slugify(operationId ?? `${method}-${path}`), taken);
     const ownParameters = parseParameters(operationValue.parameters, names);
     const ownServers = parseServers2(operationValue.servers);
-    operations.push({
+    return {
       id,
       method: method.toUpperCase(),
       path,
@@ -1378,7 +1397,24 @@ function parsePathItemOperations(pathItem, names, documentServers, warnings, pat
       responses: parseResponses(operationValue.responses, names),
       security: parseSecurity(operationValue.security),
       callbacks: options.parseCallbacks ? parseCallbacks(operationValue.callbacks, names, warnings, taken) : undefined
-    });
+    };
+  };
+  for (const method of METHODS) {
+    const operationValue = asRecord(pathItem[method]);
+    if (!operationValue)
+      continue;
+    operations.push(buildOperation(method, operationValue));
+  }
+  const additionalOperations = asRecord(pathItem.additionalOperations);
+  if (additionalOperations) {
+    for (const [method, value] of Object.entries(additionalOperations)) {
+      if (isExtensionKey(method))
+        continue;
+      const operationValue = asRecord(value);
+      if (!operationValue)
+        continue;
+      operations.push(buildOperation(method, operationValue));
+    }
   }
   return operations;
 }
@@ -1437,7 +1473,7 @@ function mergeParameters(shared, own) {
   const overridden = new Set(own.map((p) => `${p.in}:${p.name}`));
   return [...shared.filter((p) => !overridden.has(`${p.in}:${p.name}`)), ...own];
 }
-var PARAM_ORDER = ["path", "query", "header", "cookie"];
+var PARAM_ORDER = ["path", "query", "header", "cookie", "querystring"];
 function defaultStyle(location) {
   return location === "query" || location === "cookie" ? "form" : "simple";
 }
@@ -1601,7 +1637,7 @@ function parseExamples2(holder) {
         name,
         summary: asString(example.summary),
         description: asString(example.description),
-        value: "value" in example ? example.value : undefined
+        value: "value" in example ? example.value : ("dataValue" in example) ? example.dataValue : example.serializedValue
       });
     }
   }

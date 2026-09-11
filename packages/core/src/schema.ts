@@ -1,4 +1,4 @@
-import type { Composition, SchemaConstraint, SchemaNode } from './types.js';
+import type { Composition, SchemaConstraint, SchemaNode, XmlInfo } from './types.js';
 import { asRecord, asString } from './utils.js';
 
 /**
@@ -304,6 +304,9 @@ function walk(
     node.extensions = extensionEntries.map(([key, value]) => ({ key, value }));
   }
 
+  const xml = toXml(schema.xml);
+  if (xml) node.xml = xml;
+
   const discriminator = asRecord(schema.discriminator);
   const propertyName = asString(discriminator?.propertyName);
   if (discriminator && propertyName) {
@@ -352,6 +355,22 @@ function resolveDiscriminatorTarget(
     if (name === candidate) return name;
   }
   return undefined;
+}
+
+/** Parse the `xml` keyword: `undefined` unless the document declared at least one field. */
+function toXml(raw: unknown): XmlInfo | undefined {
+  const xml = asRecord(raw);
+  if (!xml) return undefined;
+  const info: XmlInfo = {
+    name: asString(xml.name),
+    namespace: asString(xml.namespace),
+    prefix: asString(xml.prefix),
+    attribute: xml.attribute === true ? true : undefined,
+    wrapped: xml.wrapped === true ? true : undefined,
+    nodeType: asString(xml.nodeType),
+  };
+  const hasAny = Object.values(info).some((value) => value !== undefined);
+  return hasAny ? info : undefined;
 }
 
 function toTypes(schema: Record<string, unknown>): string[] {

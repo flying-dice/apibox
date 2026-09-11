@@ -206,6 +206,34 @@ describe('PropertyRow', () => {
     expect(screen.getByTestId('property-id-deprecated')).toBeInTheDocument();
     expect(screen.queryByTestId('property-id-writeonly')).not.toBeInTheDocument();
   });
+
+  it('omits the xml chip entirely when the schema declared no xml keyword', () => {
+    render(PropertyRow, { schema: { name: 'id', types: ['string'] } });
+    expect(screen.queryByTestId('property-id-xml')).not.toBeInTheDocument();
+  });
+
+  it('summarises the xml keyword as a single chip', () => {
+    render(PropertyRow, {
+      schema: {
+        name: 'id',
+        types: ['string'],
+        xml: { attribute: true },
+      } satisfies SchemaNode,
+    });
+    expect(screen.getByTestId('property-id-xml')).toHaveTextContent('attribute');
+  });
+
+  it('names the element in the xml chip when the document declared one', () => {
+    render(PropertyRow, {
+      schema: {
+        name: 'tags',
+        types: ['array'],
+        xml: { name: 'tag', wrapped: true },
+      } satisfies SchemaNode,
+    });
+    expect(screen.getByTestId('property-tags-xml')).toHaveTextContent('tag');
+    expect(screen.getByTestId('property-tags-xml')).toHaveTextContent('wrapped');
+  });
 });
 
 describe('TabBar', () => {

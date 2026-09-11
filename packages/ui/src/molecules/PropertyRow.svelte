@@ -38,6 +38,21 @@
     const rendered = JSON.stringify(value);
     return rendered ?? String(value);
   }
+
+  /**
+   * A one-line summary of the `xml` keyword — full enough to be useful, compact enough not
+   * to earn its own section for a keyword only XML-documenting APIs ever declare.
+   */
+  function formatXml(xml: NonNullable<SchemaNode['xml']>): string {
+    const parts: string[] = [];
+    if (xml.name) parts.push(xml.name);
+    if (xml.namespace) parts.push(`ns: ${xml.namespace}`);
+    if (xml.prefix) parts.push(`prefix: ${xml.prefix}`);
+    if (xml.attribute) parts.push('attribute');
+    if (xml.wrapped) parts.push('wrapped');
+    if (xml.nodeType) parts.push(xml.nodeType);
+    return parts.length > 0 ? parts.join(', ') : 'declared';
+  }
 </script>
 
 <div class="row" data-testid={id}>
@@ -65,8 +80,11 @@
     <p class="description" data-testid="{id}-description">{schema.description}</p>
   {/if}
 
-  {#if schema.constraints?.length || defaultValue !== undefined || schema.enum?.length}
+  {#if schema.constraints?.length || defaultValue !== undefined || schema.enum?.length || schema.xml}
     <div class="meta">
+      {#if schema.xml}
+        <Chip label="xml" value={formatXml(schema.xml)} testId="{id}-xml" />
+      {/if}
       {#each schema.constraints ?? [] as constraint, index (index)}
         <Chip
           label={constraint.label}

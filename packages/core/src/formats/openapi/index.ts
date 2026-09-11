@@ -63,6 +63,11 @@ export async function parseOpenApi(
   const declaredDialect = jsonSchemaDialect(asString(root.jsonSchemaDialect));
   const warnings: string[] = [];
 
+  // OpenAPI 3.1+ allows a $ref to carry its own summary/description override. No special
+  // handling is needed here for that: $RefParser (dereferenceDocument's underlying library)
+  // already treats a $ref with sibling keys as an "extended reference" and merges the
+  // sibling(s) into a fresh copy of the target rather than discarding them -- see the
+  // reference-level override tests in parse.test.ts for what this produces.
   const dereferenced = await dereferenceDocument(root, options.location, warnings);
   const names = collectComponentNames(dereferenced);
 
@@ -94,6 +99,8 @@ export async function parseOpenApi(
     operations,
     schemas,
     jsonSchemaDialect: declaredDialect,
+    // 3.2: the document's own canonical URI, the same idea as a JSON Schema `$id`.
+    selfUrl: asString(dereferenced.$self),
     nav: buildNav(operations, tags, schemas),
     warnings,
   };
@@ -109,6 +116,9 @@ function parseTags(raw: unknown): TagInfo[] {
       name: asString(entry.name) as string,
       description: asString(entry.description),
       externalDocs: parseExternalDocs(entry.externalDocs),
+      // 3.2 nested tags -- see TagInfo.parent's doc comment for why navigation stays flat.
+      parent: asString(entry.parent),
+      kind: asString(entry.kind),
     }));
 }
 
@@ -179,6 +189,8 @@ function parseSecuritySchemes(root: Record<string, unknown>): SecuritySchemeInfo
                 name: scopeName,
                 description: asString(description),
               })),
+              // 3.2: an RFC 8414 Authorization Server Metadata URL for this flow.
+              oauth2MetadataUrl: asString(flow.oauth2Metadata),
             };
           })
         : undefined,
@@ -250,16 +262,13 @@ function parsePathItemOperations(
 
   const operations: Operation[] = [];
 
-  for (const method of METHODS) {
-    const operationValue = asRecord(pathItem[method]);
-    if (!operationValue) continue;
-
+  const buildOperation = (method: string, operationValue: Record<string, unknown>): Operation => {
     const operationId = asString(operationValue.operationId);
     const id = uniqueId(slugify(operationId ?? `${method}-${path}`), taken);
     const ownParameters = parseParameters(operationValue.parameters, names);
     const ownServers = parseServers(operationValue.servers);
 
-    operations.push({
+    return {
       id,
       method: method.toUpperCase(),
       path,
@@ -278,7 +287,25 @@ function parsePathItemOperations(
       callbacks: options.parseCallbacks
         ? parseCallbacks(operationValue.callbacks, names, warnings, taken)
         : undefined,
-    });
+    };
+  };
+
+  for (const method of METHODS) {
+    const operationValue = asRecord(pathItem[method]);
+    if (!operationValue) continue;
+    operations.push(buildOperation(method, operationValue));
+  }
+
+  // 3.2's `additionalOperations`: arbitrary HTTP methods (e.g. `QUERY`) beyond the 8 fixed
+  // verbs above, keyed by method name rather than a dedicated Path Item field per method.
+  const additionalOperations = asRecord(pathItem.additionalOperations);
+  if (additionalOperations) {
+    for (const [method, value] of Object.entries(additionalOperations)) {
+      if (isExtensionKey(method)) continue;
+      const operationValue = asRecord(value);
+      if (!operationValue) continue;
+      operations.push(buildOperation(method, operationValue));
+    }
   }
 
   return operations;
@@ -357,7 +384,10 @@ function mergeParameters(shared: Parameter[], own: Parameter[]): Parameter[] {
   return [...shared.filter((p) => !overridden.has(`${p.in}:${p.name}`)), ...own];
 }
 
-const PARAM_ORDER: ParameterLocation[] = ['path', 'query', 'header', 'cookie'];
+// `querystring` (3.2) last: it describes the whole raw query string as one value, which is
+// rare enough, and different enough in kind from the other locations, that ordering it with
+// the common ones would suggest a false equivalence.
+const PARAM_ORDER: ParameterLocation[] = ['path', 'query', 'header', 'cookie', 'querystring'];
 
 /**
  * OpenAPI's default `style` per parameter location — `form` for query and cookie, `simple`
@@ -591,7 +621,16 @@ function parseExamples(holder: Record<string, unknown>): ExampleValue[] | undefi
         name,
         summary: asString(example.summary),
         description: asString(example.description),
-        value: 'value' in example ? example.value : undefined,
+        // 3.2 adds `dataValue` (the value in its native data type) and `serializedValue`
+        // (already serialized for the media type) as alternatives to `value`. Reading
+        // whichever is present, in that order, keeps every spelling showing *something*
+        // rather than requiring three separate render paths for one concept.
+        value:
+          'value' in example
+            ? example.value
+            : 'dataValue' in example
+              ? example.dataValue
+              : example.serializedValue,
       });
     }
   }

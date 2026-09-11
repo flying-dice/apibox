@@ -5,6 +5,8 @@
   import SchemaCatalog from '../../organisms/SchemaCatalog.svelte';
   import SecuritySchemes from '../../organisms/SecuritySchemes.svelte';
   import ServerList from '../../organisms/ServerList.svelte';
+  import Link from '../../atoms/Link.svelte';
+  import KeyValueRow from '../../molecules/KeyValueRow.svelte';
   import { itemsByNavigation } from '../navigation-groups.js';
 
   interface Props {
@@ -20,6 +22,26 @@
 
 <article class="document" data-testid={testId}>
   <DocumentHeader {document} specVersion={document.specVersion} testId="{testId}-header" />
+
+  {#if document.jsonSchemaDialect || document.selfUrl}
+    <!--
+      Same idea as JsonSchemaDocument's dialect/schemaId row -- kept visually identical so
+      the two don't read as different features of the same underlying concept.
+    -->
+    <dl class="metadata" data-testid="{testId}-metadata">
+      {#if document.jsonSchemaDialect}
+        <KeyValueRow label="Schema dialect" testId="{testId}-dialect">
+          {document.jsonSchemaDialect}
+        </KeyValueRow>
+      {/if}
+      {#if document.selfUrl}
+        <KeyValueRow label="Document URL" testId="{testId}-self-url">
+          <Link href={document.selfUrl} testId="{testId}-self-url-link">{document.selfUrl}</Link>
+        </KeyValueRow>
+      {/if}
+    </dl>
+  {/if}
+
   <ServerList servers={document.servers} testId="{testId}-servers" />
   <SecuritySchemes schemes={document.securitySchemes} testId="{testId}-security" />
 
@@ -58,6 +80,11 @@
     display: flex;
     flex-direction: column;
     gap: var(--apibox-space-5);
+  }
+
+  .metadata {
+    max-width: 44rem;
+    margin: 0;
   }
 
   /* No gap between rows: the hairline in CollapsibleCard carries the separation. */

@@ -131,6 +131,24 @@ export interface SchemaNode {
    * accommodates that too, since it says nothing about where the composition itself lives.)
    */
   discriminator?: Discriminator;
+  /**
+   * XML serialization hints from the `xml` keyword: element/attribute name, namespace,
+   * prefix, whether this node serializes as an attribute rather than an element, whether an
+   * array wraps its items in a containing element, and (3.2) `nodeType` for text/cdata/none
+   * content. Irrelevant to a JSON-only reader, so kept off the node (`undefined`) unless the
+   * document actually declared one.
+   */
+  xml?: XmlInfo;
+}
+
+export interface XmlInfo {
+  name?: string;
+  namespace?: string;
+  prefix?: string;
+  attribute?: boolean;
+  wrapped?: boolean;
+  /** 3.2 only: `text`, `cdata` or `none`, for a leaf value's XML content model. */
+  nodeType?: string;
 }
 
 export interface Discriminator {
@@ -216,6 +234,14 @@ export interface TagInfo {
   name: string;
   description?: string;
   externalDocs?: ExternalDocs;
+  /**
+   * 3.2 nested tags: the name of this tag's parent, and (`kind`) a free-text classification
+   * such as `nav` or `badge`. Parsed so the data survives, but `buildNav` still groups
+   * operations by their first tag name only, flat -- rebuilding navigation as a tree from
+   * `parent` is a larger, separate change than modelling the field itself.
+   */
+  parent?: string;
+  kind?: string;
 }
 
 /** A single entry in the sidebar. */
@@ -261,7 +287,7 @@ export interface ApiDocumentBase {
 /* OpenAPI                                                                     */
 /* -------------------------------------------------------------------------- */
 
-export type ParameterLocation = 'path' | 'query' | 'header' | 'cookie';
+export type ParameterLocation = 'path' | 'query' | 'header' | 'cookie' | 'querystring';
 
 export interface Parameter {
   name: string;
@@ -427,6 +453,11 @@ export interface SecuritySchemeInfo {
     tokenUrl?: string;
     refreshUrl?: string;
     scopes: Array<{ name: string; description?: string }>;
+    /**
+     * 3.2: a URL to an OAuth 2.0 Authorization Server Metadata (RFC 8414) document for this
+     * flow, letting a client discover endpoints instead of relying on the URLs above alone.
+     */
+    oauth2MetadataUrl?: string;
   }>;
 }
 
@@ -487,6 +518,11 @@ export interface OpenApiDocument extends ApiDocumentBase {
    * when the document did not declare one or declared a dialect apibox does not recognise.
    */
   jsonSchemaDialect?: string;
+  /**
+   * OpenAPI 3.2's `$self`: the document's own canonical URI, the same idea as a JSON Schema
+   * document's `$id` -- both identify where the document itself claims to live.
+   */
+  selfUrl?: string;
 }
 
 /* -------------------------------------------------------------------------- */

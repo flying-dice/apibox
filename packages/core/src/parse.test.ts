@@ -362,6 +362,19 @@ describe('OpenAPI', () => {
     expect(badRequest?.content[0]?.schema?.refName).toBe('Error');
   });
 
+  it('overrides a shared response description only where the $ref declared one', async () => {
+    const doc = await load();
+    // getpet's 404 $ref declares its own description; deletepet's does not.
+    const getNotFound = doc.operations
+      .find((o) => o.id === 'getpet')
+      ?.responses.find((r) => r.status === '404');
+    const deleteNotFound = doc.operations
+      .find((o) => o.id === 'deletepet')
+      ?.responses.find((r) => r.status === '404');
+    expect(getNotFound?.description).toBe('No pet exists with the given id.');
+    expect(deleteNotFound?.description).toBe('No such resource.');
+  });
+
   it('labels an inlined $ref with the component name it came from', async () => {
     const doc = await load();
     const items = doc.operations.find((o) => o.id === 'listpets')?.responses[0]?.content[0]?.schema
@@ -890,6 +903,257 @@ describe('OpenAPI', () => {
       const entry = doc.operations[0]?.requestBody?.content[0]?.encoding?.[0];
       expect(entry?.style).toEqual({ value: 'form', declared: false });
       expect(entry?.explode).toEqual({ value: true, declared: false });
+    });
+  });
+
+  describe('reference-level overrides', () => {
+    // OpenAPI 3.1+ lets a $ref carry its own summary/description, overriding the target's.
+    // dereferenceDocument's underlying library ($RefParser) already treats a $ref with
+    // sibling keys as an "extended reference" and merges them into a fresh copy of the
+    // target, so no bespoke handling is needed in @apibox/core for this -- these tests are
+    // here to pin that behaviour down as something apibox relies on, not something it
+    // implements.
+    const withResponses = async (a: Record<string, unknown>, b: Record<string, unknown>) =>
+      (await parseApiDocument({
+        openapi: '3.1.0',
+        info: { title: 'R', version: '1.0.0' },
+        paths: {
+          '/a': { get: { operationId: 'a', responses: { '200': a } } },
+          '/b': { get: { operationId: 'b', responses: { '200': b } } },
+        },
+        components: {
+          responses: {
+            Shared: { description: 'The target response.', content: {} },
+          },
+        },
+      })) as OpenApiDocument;
+
+    it('overrides the target description at a $ref that declares its own', async () => {
+      const doc = await withResponses(
+        { $ref: '#/components/responses/Shared', description: 'Overridden for /a.' },
+        { $ref: '#/components/responses/Shared' },
+      );
+      const a = doc.operations.find((o) => o.id === 'a')?.responses[0];
+      const b = doc.operations.find((o) => o.id === 'b')?.responses[0];
+      expect(a?.description).toBe('Overridden for /a.');
+      // No override declared at /b -- it inherits the target's own description, unaffected.
+      expect(b?.description).toBe('The target response.');
+    });
+
+    it('does not let one use’s override leak into another use of the same target', async () => {
+      const doc = await withResponses(
+        { $ref: '#/components/responses/Shared', description: 'A' },
+        { $ref: '#/components/responses/Shared', description: 'B' },
+      );
+      const a = doc.operations.find((o) => o.id === 'a')?.responses[0];
+      const b = doc.operations.find((o) => o.id === 'b')?.responses[0];
+      expect(a?.description).toBe('A');
+      expect(b?.description).toBe('B');
+    });
+
+    it('overrides a schema property’s description at its own $ref, not just non-schema references', async () => {
+      const doc = (await parseApiDocument({
+        openapi: '3.1.0',
+        info: { title: 'S', version: '1.0.0' },
+        paths: { '/a': { get: { operationId: 'a', responses: { '200': { description: 'ok' } } } } },
+        components: {
+          schemas: {
+            Pet: {
+              type: 'object',
+              description: 'A pet.',
+              properties: {
+                parent: {
+                  $ref: '#/components/schemas/Pet',
+                  description: 'The pet this one descends from, if known.',
+                },
+              },
+            },
+          },
+        },
+      })) as OpenApiDocument;
+
+      const pet = doc.schemas.find((s) => s.name === 'Pet');
+      const parent = pet?.properties?.find((p) => p.name === 'parent');
+      expect(parent?.description).toBe('The pet this one descends from, if known.');
+    });
+  });
+
+  describe('3.2 constructs', () => {
+    it('reads additionalOperations as operations with an arbitrary HTTP method', async () => {
+      const doc = (await parseApiDocument({
+        openapi: '3.2.0',
+        info: { title: 'A', version: '1.0.0' },
+        paths: {
+          '/things': {
+            get: { operationId: 'listThings', responses: { '200': { description: 'ok' } } },
+            additionalOperations: {
+              QUERY: {
+                operationId: 'queryThings',
+                summary: 'Query things with a body',
+                responses: { '200': { description: 'ok' } },
+              },
+            },
+          },
+        },
+      })) as OpenApiDocument;
+
+      expect(doc.operations.map((o) => o.method)).toEqual(['GET', 'QUERY']);
+      const query = doc.operations.find((o) => o.operationId === 'queryThings');
+      expect(query?.summary).toBe('Query things with a body');
+    });
+
+    it('accepts the querystring parameter location', async () => {
+      const doc = (await parseApiDocument({
+        openapi: '3.2.0',
+        info: { title: 'Q', version: '1.0.0' },
+        paths: {
+          '/things': {
+            get: {
+              operationId: 'listThings',
+              parameters: [{ name: 'raw', in: 'querystring', schema: { type: 'string' } }],
+              responses: { '200': { description: 'ok' } },
+            },
+          },
+        },
+      })) as OpenApiDocument;
+
+      expect(doc.operations[0]?.parameters[0]).toMatchObject({ name: 'raw', in: 'querystring' });
+    });
+
+    it('resolves a $ref into components.mediaTypes the same way as any other reusable component', async () => {
+      const doc = (await parseApiDocument({
+        openapi: '3.2.0',
+        info: { title: 'M', version: '1.0.0' },
+        paths: {
+          '/things': {
+            get: {
+              operationId: 'listThings',
+              responses: {
+                '200': {
+                  description: 'ok',
+                  content: { 'application/json': { $ref: '#/components/mediaTypes/Thing' } },
+                },
+              },
+            },
+          },
+        },
+        components: {
+          mediaTypes: {
+            Thing: { schema: { type: 'object', properties: { id: { type: 'string' } } } },
+          },
+        },
+      })) as OpenApiDocument;
+
+      const content = doc.operations[0]?.responses[0]?.content[0];
+      expect(content?.contentType).toBe('application/json');
+      expect(content?.schema?.properties?.map((p) => p.name)).toEqual(['id']);
+    });
+
+    it('reads Tag.parent and Tag.kind for 3.2 nested tags', async () => {
+      const doc = (await parseApiDocument({
+        openapi: '3.2.0',
+        info: { title: 'T', version: '1.0.0' },
+        tags: [
+          { name: 'animals', kind: 'nav' },
+          { name: 'pets', parent: 'animals' },
+        ],
+        paths: {},
+      })) as OpenApiDocument;
+
+      expect(doc.tags.find((t) => t.name === 'animals')?.kind).toBe('nav');
+      expect(doc.tags.find((t) => t.name === 'pets')?.parent).toBe('animals');
+    });
+
+    it('reads $self as the document URL', async () => {
+      const doc = (await parseApiDocument({
+        openapi: '3.2.0',
+        $self: 'https://api.example.com/openapi.yaml',
+        info: { title: 'Self', version: '1.0.0' },
+        paths: {},
+      })) as OpenApiDocument;
+
+      expect(doc.selfUrl).toBe('https://api.example.com/openapi.yaml');
+    });
+
+    it('reads an oauth2 flow’s oauth2Metadata URL', async () => {
+      const doc = (await parseApiDocument({
+        openapi: '3.2.0',
+        info: { title: 'O', version: '1.0.0' },
+        paths: {},
+        components: {
+          securitySchemes: {
+            oauth: {
+              type: 'oauth2',
+              flows: {
+                clientCredentials: {
+                  tokenUrl: 'https://example.com/token',
+                  scopes: {},
+                  oauth2Metadata: 'https://example.com/.well-known/oauth-authorization-server',
+                },
+              },
+            },
+          },
+        },
+      })) as OpenApiDocument;
+
+      expect(doc.securitySchemes[0]?.flows?.[0]?.oauth2MetadataUrl).toBe(
+        'https://example.com/.well-known/oauth-authorization-server',
+      );
+    });
+
+    it('reads Example.dataValue and serializedValue as alternative spellings of value', async () => {
+      const doc = (await parseApiDocument({
+        openapi: '3.2.0',
+        info: { title: 'E', version: '1.0.0' },
+        paths: {
+          '/things': {
+            get: {
+              operationId: 'listThings',
+              responses: {
+                '200': {
+                  description: 'ok',
+                  content: {
+                    'application/json': {
+                      schema: { type: 'object' },
+                      examples: {
+                        fromData: { dataValue: { id: 1 } },
+                        fromSerialized: { serializedValue: '{"id":2}' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      })) as OpenApiDocument;
+
+      const examples = doc.operations[0]?.responses[0]?.content[0]?.examples;
+      expect(examples?.find((e) => e.name === 'fromData')?.value).toEqual({ id: 1 });
+      expect(examples?.find((e) => e.name === 'fromSerialized')?.value).toBe('{"id":2}');
+    });
+
+    it('reads the xml keyword onto a schema node', async () => {
+      const doc = (await parseApiDocument({
+        openapi: '3.2.0',
+        info: { title: 'X', version: '1.0.0' },
+        paths: {},
+        components: {
+          schemas: {
+            Pet: {
+              type: 'object',
+              xml: { name: 'pet', namespace: 'https://example.com/schema', wrapped: false },
+              properties: {
+                id: { type: 'string', xml: { attribute: true } },
+              },
+            },
+          },
+        },
+      })) as OpenApiDocument;
+
+      const pet = doc.schemas.find((s) => s.name === 'Pet');
+      expect(pet?.xml).toEqual({ name: 'pet', namespace: 'https://example.com/schema' });
+      expect(pet?.properties?.[0]?.xml).toEqual({ attribute: true });
     });
   });
 });

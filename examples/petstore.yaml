@@ -160,7 +160,11 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Pet' }
-        '404': { $ref: '#/components/responses/NotFound' }
+        '404':
+          # A reference-level override (OpenAPI 3.1+): this use of the shared NotFound
+          # response gets its own description instead of the target's generic one.
+          $ref: '#/components/responses/NotFound'
+          description: No pet exists with the given id.
     delete:
       operationId: deletePet
       summary: Delete a pet
@@ -169,6 +173,7 @@ paths:
       deprecated: true
       responses:
         '204': { description: Deleted. }
+        # No override here -- inherits the target's own description, unlike GET above.
         '404': { $ref: '#/components/responses/NotFound' }
   /store/inventory:
     get:

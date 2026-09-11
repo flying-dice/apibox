@@ -83,6 +83,51 @@ describe('OpenApiDocument', () => {
     ).toHaveTextContent('petId');
   });
 
+  it('omits the dialect/document-URL metadata row when neither is set', () => {
+    render(OpenApiDocument, { document: PETSTORE_DOCUMENT });
+    expect(screen.queryByTestId('openapi-document-metadata')).not.toBeInTheDocument();
+  });
+
+  it('renders jsonSchemaDialect and $self alongside the header, like JsonSchemaDocument does', () => {
+    render(OpenApiDocument, {
+      document: {
+        ...PETSTORE_DOCUMENT,
+        jsonSchemaDialect: '2020-12',
+        selfUrl: 'https://api.example.com/openapi.yaml',
+      },
+    });
+
+    expect(screen.getByTestId('openapi-document-dialect')).toHaveTextContent('2020-12');
+    expect(screen.getByTestId('openapi-document-self-url-link')).toHaveAttribute(
+      'href',
+      'https://api.example.com/openapi.yaml',
+    );
+  });
+
+  it('links to the oauth2Metadata URL on a flow that declared one', () => {
+    render(OpenApiDocument, {
+      document: {
+        ...PETSTORE_DOCUMENT,
+        securitySchemes: PETSTORE_DOCUMENT.securitySchemes.map((scheme) =>
+          scheme.name === 'oauth'
+            ? {
+                ...scheme,
+                flows: scheme.flows?.map((flow) => ({
+                  ...flow,
+                  oauth2MetadataUrl: 'https://example.com/.well-known/oauth-authorization-server',
+                })),
+              }
+            : scheme,
+        ),
+      },
+    });
+
+    expect(screen.getByTestId('openapi-document-security-1-flow-0-metadata-link')).toHaveAttribute(
+      'href',
+      'https://example.com/.well-known/oauth-authorization-server',
+    );
+  });
+
   it('marks deprecated operations in text and metadata', () => {
     render(OpenApiDocument, { document: PETSTORE_DOCUMENT });
     const method = screen.getByTestId('openapi-document-operation-deletePet-method');

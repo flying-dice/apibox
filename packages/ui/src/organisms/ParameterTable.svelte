@@ -11,7 +11,7 @@
   }
 
   const { parameters, testId = 'parameters' }: Props = $props();
-  const locations: readonly ParameterLocation[] = ['path', 'query', 'header', 'cookie'];
+  const locations: readonly ParameterLocation[] = ['path', 'query', 'header', 'cookie', 'querystring'];
 
   /**
    * Serialisation is only worth a row's screen space when it says something beyond "the

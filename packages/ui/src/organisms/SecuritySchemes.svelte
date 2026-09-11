@@ -70,6 +70,14 @@
                       Refresh URL
                     </Link>
                   {/if}
+                  {#if flow.oauth2MetadataUrl}
+                    <Link
+                      href={flow.oauth2MetadataUrl}
+                      testId="{testId}-{index}-flow-{flowIndex}-metadata-link"
+                    >
+                      Authorization server metadata
+                    </Link>
+                  {/if}
                   {#if flow.scopes.length > 0}
                     <dl data-testid="{testId}-{index}-flow-{flowIndex}-scopes">
                       {#each flow.scopes as scope, scopeIndex (scopeIndex)}
