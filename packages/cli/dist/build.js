@@ -11,7 +11,7 @@ export async function buildSite(options) {
     const cwd = options.cwd ?? process.cwd();
     const outDir = resolve(cwd, options.outDir);
     const sources = await expandInputs(options.inputs, cwd);
-    const documents = await loadDocuments(sources);
+    const documents = await loadDocuments(sources, options.format);
     const manifest = createManifest(documents, options.generator ?? (await generatorName()), options.title, options.generatedAt);
     await cp(options.assetDir ?? defaultAssetDirectory(), outDir, {
         recursive: true,
@@ -23,11 +23,11 @@ export async function buildSite(options) {
     await rewriteIndex(resolve(outDir, 'index.html'), options.title ?? 'apibox', options.base ?? './');
     return { outDir, manifest };
 }
-async function loadDocuments(sources) {
+async function loadDocuments(sources, format) {
     const takenIds = new Set();
     const documents = [];
     for (const source of sources) {
-        const document = await loadApiDocument(source);
+        const document = await loadApiDocument(source, { format });
         const id = uniqueId(document.id, takenIds);
         documents.push(id === document.id ? document : { ...document, id });
     }

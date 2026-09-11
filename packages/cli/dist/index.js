@@ -31,10 +31,40 @@ function asArray(value) {
 }
 
 // packages/core/src/detect.ts
-function detectFormat(raw) {
+var DIALECTS = [
+  [/^https?:\/\/json-schema\.org\/draft\/2020-12\/schema#?$/, "2020-12"],
+  [/^https?:\/\/json-schema\.org\/draft\/2019-09\/schema#?$/, "2019-09"],
+  [/^https?:\/\/json-schema\.org\/draft-07\/schema#?$/, "draft-07"],
+  [/^https?:\/\/json-schema\.org\/draft-06\/schema#?$/, "draft-06"],
+  [/^https?:\/\/json-schema\.org\/draft-04\/schema#?$/, "draft-04"]
+];
+function jsonSchemaDialect(schemaUri) {
+  if (!schemaUri)
+    return;
+  for (const [pattern, version] of DIALECTS) {
+    if (pattern.test(schemaUri.trim()))
+      return version;
+  }
+  return;
+}
+function markerSpecVersion(doc, format) {
+  switch (format) {
+    case "openapi":
+      return asString(doc.openapi) ?? asString(doc.swagger) ?? "";
+    case "asyncapi":
+      return asString(doc.asyncapi) ?? "";
+    case "jsonrpc":
+      return asString(doc.openrpc) ?? "";
+    case "jsonschema":
+      return jsonSchemaDialect(asString(doc.$schema)) ?? "";
+  }
+}
+function detectFormat(raw, hints = {}) {
   const doc = asRecord(raw);
   if (!doc)
     return;
+  if (hints.format)
+    return { format: hints.format, specVersion: markerSpecVersion(doc, hints.format) };
   const openapi = asString(doc.openapi);
   if (openapi)
     return { format: "openapi", specVersion: openapi };
@@ -47,6 +77,9 @@ function detectFormat(raw) {
   const swagger = asString(doc.swagger);
   if (swagger)
     return { format: "openapi", specVersion: swagger };
+  const dialect = jsonSchemaDialect(asString(doc.$schema));
+  if (dialect)
+    return { format: "jsonschema", specVersion: dialect };
   return;
 }
 
@@ -74,7 +107,7 @@ import { basename } from "path";
 // packages/core/src/source-name.ts
 function sourceName(fileName) {
   const withoutExtension = fileName.replace(/\.[^.]+$/, "");
-  return withoutExtension.replace(/\.(openapi|asyncapi|openrpc|jsonrpc|api|spec)$/i, "") || "api";
+  return withoutExtension.replace(/\.(openapi|asyncapi|openrpc|jsonrpc|api|spec|schema)$/i, "") || "api";
 }
 
 // packages/core/src/load.ts
@@ -724,6 +757,88 @@ function buildNav2(methods, schemas) {
   return nav;
 }
 
+// packages/core/src/formats/jsonschema/index.ts
+var CONTAINER_KEYS = new Set(["$schema", "$id", "id", "$defs", "definitions", "$comment"]);
+var DEFAULT_DIALECT = "2020-12";
+async function parseJsonSchema(raw, options = {}) {
+  const root = asRecord(raw);
+  if (!root)
+    throw new UnsupportedDocumentError("Document is not an object.");
+  const warnings = [];
+  const dereferenced = await dereferenceDocument(root, options.location, warnings);
+  const declaredDialect = asString(dereferenced.$schema);
+  const dialect = jsonSchemaDialect(declaredDialect);
+  if (declaredDialect && !dialect) {
+    warnings.push(`Unrecognised $schema dialect "${declaredDialect}". Treating it as ${DEFAULT_DIALECT}.`);
+  } else if (!declaredDialect) {
+    warnings.push(`No $schema dialect declared. Treating it as ${DEFAULT_DIALECT}.`);
+  }
+  const specVersion = dialect ?? DEFAULT_DIALECT;
+  const definitionEntries = collectDefinitionEntries(dereferenced);
+  const names = collectDefinitionNames(definitionEntries);
+  const hasRoot = hasRootContent(dereferenced);
+  if (!hasRoot && definitionEntries.length === 0) {
+    warnings.push("The document declares neither a root schema nor any $defs/definitions.");
+  }
+  const rootNode = hasRoot ? normaliseSchema(dereferenced, { names }) : undefined;
+  if (rootNode)
+    delete rootNode.description;
+  const schemas = definitionEntries.map(([name, schema]) => normaliseSchema(schema, { names }, name)).filter((node) => Boolean(node));
+  const title = asString(dereferenced.title) ?? options.id ?? "Untitled schema";
+  const schemaId = asString(dereferenced.$id) ?? asString(dereferenced.id);
+  return {
+    id: options.id ?? slugify(title),
+    kind: "jsonschema",
+    specVersion,
+    version: specVersion,
+    title,
+    description: asString(dereferenced.description),
+    schemaId,
+    root: rootNode,
+    schemas,
+    servers: [],
+    tags: [],
+    nav: buildNav3(rootNode, schemas),
+    warnings
+  };
+}
+function hasRootContent(root) {
+  return Object.keys(root).some((key) => !CONTAINER_KEYS.has(key));
+}
+function collectDefinitionEntries(root) {
+  const entries = [];
+  const seen = new Set;
+  for (const key of ["$defs", "definitions"]) {
+    const defs = asRecord(root[key]);
+    if (!defs)
+      continue;
+    for (const [name, schema] of Object.entries(defs)) {
+      if (seen.has(schema))
+        continue;
+      seen.add(schema);
+      entries.push([name, schema]);
+    }
+  }
+  return entries;
+}
+function collectDefinitionNames(entries) {
+  const names = new Map;
+  for (const [name, schema] of entries) {
+    if (typeof schema === "object" && schema !== null)
+      names.set(schema, name);
+  }
+  return names;
+}
+function buildNav3(root, schemas) {
+  const nav = [];
+  if (root)
+    nav.push({ id: "root", label: "Schema" });
+  const schemasNode = schemaNavigation(schemas);
+  if (schemasNode)
+    nav.push({ ...schemasNode, label: "Definitions" });
+  return nav;
+}
+
 // packages/core/src/formats/openapi/index.ts
 var METHODS = ["get", "post", "put", "patch", "delete", "options", "head", "trace"];
 async function parseOpenApi(raw, options = {}) {
@@ -762,7 +877,7 @@ async function parseOpenApi(raw, options = {}) {
     security: parseSecurity(dereferenced.security),
     operations,
     schemas,
-    nav: buildNav3(operations, tags, schemas),
+    nav: buildNav4(operations, tags, schemas),
     warnings
   };
 }
@@ -986,7 +1101,7 @@ function parseExamples2(holder) {
   }
   return out.length > 0 ? out : undefined;
 }
-function buildNav3(operations, tags, schemas) {
+function buildNav4(operations, tags, schemas) {
   const groups = new Map;
   for (const tag of tags)
     groups.set(tag.name, []);
@@ -1023,9 +1138,9 @@ function buildNav3(operations, tags, schemas) {
 
 // packages/core/src/parse.ts
 async function parseApiDocument(raw, options = {}) {
-  const detected = detectFormat(raw);
+  const detected = detectFormat(raw, { format: options.format });
   if (!detected) {
-    throw new UnsupportedDocumentError("Could not identify the document. Expected a root `openapi`, `asyncapi` or " + "`openrpc` version field.");
+    throw new UnsupportedDocumentError("Could not identify the document. Expected a root `openapi`, `asyncapi`, `openrpc` " + "or recognised `$schema` version field, or an explicit `format` option.");
   }
   return parseDetected(raw, detected, options);
 }
@@ -1037,17 +1152,20 @@ async function parseDetected(raw, detected, options) {
       return parseAsyncApi(raw, options);
     case "jsonrpc":
       return parseJsonRpc(raw, options);
+    case "jsonschema":
+      return parseJsonSchema(raw, options);
   }
 }
 async function loadApiDocument(location, options = {}) {
   const source = await loadSource(location);
   return parseApiDocument(source.raw, {
     location: options.location ?? source.location,
-    id: options.id ?? slugify(source.name)
+    id: options.id ?? slugify(source.name),
+    format: options.format
   });
 }
 // packages/core/src/validate.ts
-var FORMATS = new Set(["openapi", "asyncapi", "jsonrpc"]);
+var FORMATS = new Set(["openapi", "asyncapi", "jsonrpc", "jsonschema"]);
 // packages/cli/src/inputs.ts
 import { isAbsolute, relative, resolve, sep } from "path";
 import { glob } from "tinyglobby";
@@ -1084,7 +1202,7 @@ async function buildSite(options) {
   const cwd = options.cwd ?? process.cwd();
   const outDir = resolve2(cwd, options.outDir);
   const sources = await expandInputs(options.inputs, cwd);
-  const documents = await loadDocuments(sources);
+  const documents = await loadDocuments(sources, options.format);
   const manifest = createManifest(documents, options.generator ?? await generatorName(), options.title, options.generatedAt);
   await cp(options.assetDir ?? defaultAssetDirectory(), outDir, {
     recursive: true,
@@ -1096,11 +1214,11 @@ async function buildSite(options) {
   await rewriteIndex(resolve2(outDir, "index.html"), options.title ?? "apibox", options.base ?? "./");
   return { outDir, manifest };
 }
-async function loadDocuments(sources) {
+async function loadDocuments(sources, format) {
   const takenIds = new Set;
   const documents = [];
   for (const source of sources) {
-    const document = await loadApiDocument(source);
+    const document = await loadApiDocument(source, { format });
     const id = uniqueId(document.id, takenIds);
     documents.push(id === document.id ? document : { ...document, id });
   }
@@ -1160,6 +1278,17 @@ import { dirname as dirname2, resolve as resolve4 } from "path";
 import { access } from "fs/promises";
 import { resolve as resolve3 } from "path";
 import { pathToFileURL } from "url";
+
+// packages/cli/src/format.ts
+var FORMAT_IDS = ["openapi", "asyncapi", "jsonrpc", "jsonschema"];
+function parseFormat(value) {
+  if (!FORMAT_IDS.includes(value)) {
+    throw new Error(`Unknown format: ${value}. Expected one of: ${FORMAT_IDS.join(", ")}.`);
+  }
+  return value;
+}
+
+// packages/cli/src/config.ts
 var CONFIG_FILENAMES = [
   "apibox.config.ts",
   "apibox.config.mts",
@@ -1189,7 +1318,7 @@ async function exists(path) {
   }
 }
 function isConfig(value) {
-  return typeof value === "object" && value !== null && "inputs" in value && Array.isArray(value.inputs) && value.inputs.every((input) => typeof input === "string") && "out" in value && typeof value.out === "string" && (!("title" in value) || value.title === undefined || typeof value.title === "string") && (!("base" in value) || value.base === undefined || typeof value.base === "string");
+  return typeof value === "object" && value !== null && "inputs" in value && Array.isArray(value.inputs) && value.inputs.every((input) => typeof input === "string") && "out" in value && typeof value.out === "string" && (!("title" in value) || value.title === undefined || typeof value.title === "string") && (!("base" in value) || value.base === undefined || typeof value.base === "string") && (!("format" in value) || value.format === undefined || FORMAT_IDS.includes(value.format));
 }
 function isNodeError(error) {
   return error instanceof Error && "code" in error;
@@ -1197,7 +1326,7 @@ function isNodeError(error) {
 
 // packages/cli/src/cli.ts
 var HELP = `Usage:
-  apibox build <inputs...> [--out ./site] [--title "API docs"] [--base ./]
+  apibox build <inputs...> [--out ./site] [--title "API docs"] [--base ./] [--format <${FORMAT_IDS.join("|")}>] [--asset-dir ./shell]
   apibox init [path]
 `;
 var CONSOLE_IO = {
@@ -1229,7 +1358,9 @@ async function runBuild(args, io, cwd) {
     inputs: parsed.inputs.length > 0 ? parsed.inputs : config?.inputs ?? [],
     outDir: parsed.outDir ?? config?.out ?? "./site",
     title: parsed.title ?? config?.title,
-    base: parsed.base ?? config?.base
+    base: parsed.base ?? config?.base,
+    format: parsed.format ?? config?.format,
+    assetDir: parsed.assetDir
   });
   io.stdout(`Built ${result.manifest.documents.length} document(s) in ${result.outDir}`);
   return 0;
@@ -1256,6 +1387,8 @@ function parseBuildArguments(args) {
   let outDir;
   let title;
   let base;
+  let format;
+  let assetDir;
   for (let index = 0;index < args.length; index += 1) {
     const argument = args[index];
     if (argument === undefined)
@@ -1265,7 +1398,7 @@ function parseBuildArguments(args) {
       continue;
     }
     const [flag, inlineValue] = argument.split("=", 2);
-    if (!["--out", "--title", "--base"].includes(flag ?? "")) {
+    if (!["--out", "--title", "--base", "--format", "--asset-dir"].includes(flag ?? "")) {
       throw new Error(`Unknown option: ${flag}`);
     }
     const value = inlineValue ?? args[++index];
@@ -1277,8 +1410,12 @@ function parseBuildArguments(args) {
       title = value;
     if (flag === "--base")
       base = value;
+    if (flag === "--format")
+      format = parseFormat(value);
+    if (flag === "--asset-dir")
+      assetDir = value;
   }
-  return { inputs, outDir, title, base };
+  return { inputs, outDir, title, base, format, assetDir };
 }
 export {
   buildSite,

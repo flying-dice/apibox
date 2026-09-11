@@ -1,6 +1,7 @@
 import { access } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { FORMAT_IDS } from './format.js';
 const CONFIG_FILENAMES = [
     'apibox.config.ts',
     'apibox.config.mts',
@@ -39,7 +40,10 @@ function isConfig(value) {
         'out' in value &&
         typeof value.out === 'string' &&
         (!('title' in value) || value.title === undefined || typeof value.title === 'string') &&
-        (!('base' in value) || value.base === undefined || typeof value.base === 'string'));
+        (!('base' in value) || value.base === undefined || typeof value.base === 'string') &&
+        (!('format' in value) ||
+            value.format === undefined ||
+            FORMAT_IDS.includes(value.format)));
 }
 function isNodeError(error) {
     return error instanceof Error && 'code' in error;
