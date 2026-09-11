@@ -1,14 +1,18 @@
 import { buildSite } from '@apibox/cli';
 import * as vscode from 'vscode';
+import { DocumentTreeProvider } from './document-tree.js';
 import { PreviewSession } from './preview-session.js';
 import { pagesWorkflow } from './workflow.js';
 
 export function activate(context: vscode.ExtensionContext): void {
   const provider = new ApiPreviewProvider(context);
+  const documentTree = new DocumentTreeProvider();
   context.subscriptions.push(
     vscode.window.registerCustomEditorProvider('apibox.preview', provider, {
       webviewOptions: { retainContextWhenHidden: true },
     }),
+    documentTree,
+    vscode.window.registerTreeDataProvider('apibox.documents', documentTree),
     registerCommand('apibox.preview', 'Could not open the APIBox preview', previewActiveDocument),
     registerCommand('apibox.build', 'Could not build the APIBox site', () =>
       buildStaticSite(context),
@@ -17,6 +21,9 @@ export function activate(context: vscode.ExtensionContext): void {
       'apibox.deploy',
       'Could not configure APIBox GitHub Pages deployment',
       scaffoldPagesWorkflow,
+    ),
+    registerCommand('apibox.refreshDocuments', 'Could not refresh the APIBox document rail', () =>
+      documentTree.refresh(),
     ),
   );
 }

@@ -16,6 +16,7 @@
   "main": "./dist/extension.js",
   "files": [
     "LICENSE",
+    "icons",
     "dist",
     "media",
     "static-viewer"
@@ -24,7 +25,8 @@
     "onCustomEditor:apibox.preview",
     "onCommand:apibox.preview",
     "onCommand:apibox.build",
-    "onCommand:apibox.deploy"
+    "onCommand:apibox.deploy",
+    "onView:apibox.documents"
   ],
   "contributes": {
     "commands": [
@@ -42,6 +44,12 @@
         "command": "apibox.deploy",
         "title": "Deploy Static Site to GitHub Pages",
         "category": "APIBox"
+      },
+      {
+        "command": "apibox.refreshDocuments",
+        "title": "Refresh",
+        "category": "APIBox",
+        "icon": "$(refresh)"
       }
     ],
     "menus": {
@@ -57,6 +65,13 @@
           "command": "apibox.preview",
           "when": "resourceExtname == .yaml || resourceExtname == .yml || resourceExtname == .json",
           "group": "navigation@20"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "apibox.refreshDocuments",
+          "when": "view == apibox.documents",
+          "group": "navigation"
         }
       ]
     },
@@ -77,7 +92,55 @@
         ],
         "priority": "option"
       }
-    ]
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "apibox",
+          "title": "APIBox",
+          "icon": "icons/activity-bar.svg"
+        }
+      ]
+    },
+    "views": {
+      "apibox": [
+        {
+          "id": "apibox.documents",
+          "name": "Documents"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "apibox.documents",
+        "contents": "No API documents detected in this workspace.\n[Refresh](command:apibox.refreshDocuments)\nAdjust the `apibox.include` and `apibox.exclude` settings to widen or narrow the scan."
+      }
+    ],
+    "configuration": {
+      "title": "APIBox",
+      "properties": {
+        "apibox.include": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "**/*.{yaml,yml,json}"
+          ],
+          "description": "Glob patterns scanned for API documents shown in the APIBox activity bar rail."
+        },
+        "apibox.exclude": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "**/node_modules/**"
+          ],
+          "description": "Glob patterns excluded from the APIBox document scan."
+        }
+      }
+    }
   },
   "scripts": {
     "build": "node scripts/build.mjs",
