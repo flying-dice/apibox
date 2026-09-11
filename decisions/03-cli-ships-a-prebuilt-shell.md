@@ -33,3 +33,8 @@ because `prepare` cannot be relied upon to fire for a git dependency of a worksp
   hydrate the same bundle — the architecture leaves room for it.
 - Built assets live in git, which makes the repo noisier. Confining them to one directory
   written only by CI keeps the noise contained.
+- Because that directory is written only by CI, it lags behind any local UI change. Running
+  the CLI from source (`bun run dev:cli`) therefore rebuilds the viewer and builds around its
+  output via `--asset-dir`, rather than the committed shell. Without that, a developer's own
+  change is silently absent from the site they generate, which reads as a broken change
+  rather than a stale artefact.

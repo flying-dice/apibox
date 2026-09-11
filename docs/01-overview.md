@@ -1,7 +1,7 @@
 # apibox
 
-apibox renders OpenAPI, AsyncAPI and JSON-RPC documentation three ways, from one
-rendering engine:
+apibox renders OpenAPI, AsyncAPI, JSON-RPC and JSON Schema documentation three ways,
+from one rendering engine:
 
 1. **In VS Code** — open a spec file and read it as documentation, styled with your own
    colour theme, updating as you edit.
@@ -64,6 +64,13 @@ commands below:
 | `bun run dev:extension` | Build/watch the extension, then launch an isolated VS Code window on `examples/` with only APIBox loaded |
 | `bun run dev:core` | Core library TypeScript compiler in watch mode |
 
+`bun run dev:cli -- build ...` rebuilds the viewer shell from source first and builds the
+site around that, so a local change to `@apibox/ui` or `@apibox/viewer` shows up immediately.
+A published CLI run instead copies the shell committed to `packages/cli/assets/viewer` — see
+`decisions/03-cli-ships-a-prebuilt-shell.md` — and that directory is written only by CI, so
+it lags behind your working copy. Pass `--asset-dir` to build around a shell you have already
+built yourself.
+
 The extension command opens `examples/` directly in a dedicated Extension Development
 Host with isolated user-data and extension directories, so APIBox is the only non-builtin
 extension loaded. Pressing F5 uses the same examples workspace and starts only the watcher
@@ -74,3 +81,9 @@ served directly.
 Supported `.yaml`, `.yml` and `.json` files expose **APIBox: Preview API Document** in
 both the Explorer and editor context menus. The selected file is passed directly to the
 extension, so it does not have to be the active text editor.
+
+The APIBox activity bar rail lists every detected document in the workspace, grouped by
+format, so you don't have to already know which file it is. Selecting one opens the same
+preview. Detection is content-based — the same `detectFormat` used everywhere else — so
+unrelated JSON/YAML like `package.json` never appears; `apibox.include` and `apibox.exclude`
+narrow the scan in a large monorepo.

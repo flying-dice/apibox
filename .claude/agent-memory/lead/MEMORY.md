@@ -1,0 +1,6 @@
+- [Supported formats & JSON Schema ask](project_supported_formats.md) — four formats: three shipped, standalone JSON Schema added 2026-09-11
+- [Spec coverage baseline](project_spec_coverage_baseline.md) — measured 2026-09-11: OpenAPI ~45%, OpenRPC ~64%, AsyncAPI ~35%, bindings 0%
+- [Repo conventions for planning](feedback_repodoc_not_docs_bots.md) — plan in RepoDoc boards/decisions, not docs/bots
+- [Subagents create stray worktrees](feedback_subagent_worktrees.md) — verify where a subagent's work actually landed before trusting "done"
+- [Subagent write guard & late reports](feedback_subagent_write_guard.md) — Write/Edit is blocked; brief agents to use Bash heredocs
+- [Verify UI by looking, not by tests](feedback_verify_ui_visually.md) — screenshot real builds; several defects passed every test
