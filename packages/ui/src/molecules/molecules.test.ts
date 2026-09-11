@@ -1,9 +1,11 @@
 import type { SchemaNode } from '@apibox/core';
 import { render, screen } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
+import { tick } from 'svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { text } from '../test-utils.js';
 import CodeBlock from './CodeBlock.svelte';
+import CollapsibleCard from './CollapsibleCard.svelte';
 import KeyValueRow from './KeyValueRow.svelte';
 import NavItem from './NavItem.svelte';
 import PropertyRow from './PropertyRow.svelte';
@@ -381,5 +383,105 @@ describe('KeyValueRow', () => {
     const row = screen.getByTestId('kv-version');
     expect(row).toHaveTextContent('Version');
     expect(row).toHaveTextContent('1.4.0');
+  });
+});
+
+describe('CollapsibleCard', () => {
+  it('renders collapsed by default', () => {
+    render(CollapsibleCard, {
+      id: 'item-1',
+      testId: 'item',
+      summary: text('Item one'),
+      children: text('Body'),
+    });
+
+    expect(screen.getByTestId('item-toggle')).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByTestId('item-content')).toHaveAttribute('hidden', 'until-found');
+  });
+
+  it('expands on a header click, without affecting a second instance', async () => {
+    render(CollapsibleCard, {
+      id: 'item-1',
+      testId: 'item-one',
+      summary: text('Item one'),
+      children: text('Body one'),
+    });
+    render(CollapsibleCard, {
+      id: 'item-2',
+      testId: 'item-two',
+      summary: text('Item two'),
+      children: text('Body two'),
+    });
+
+    await userEvent.click(screen.getByTestId('item-one-toggle'));
+
+    expect(screen.getByTestId('item-one-toggle')).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByTestId('item-one-content')).not.toHaveAttribute('hidden');
+    // Independent toggling, not an accordion: the second card is untouched.
+    expect(screen.getByTestId('item-two-toggle')).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByTestId('item-two-content')).toHaveAttribute('hidden', 'until-found');
+  });
+
+  it('collapses again on a second click', async () => {
+    render(CollapsibleCard, {
+      id: 'item-1',
+      testId: 'item',
+      summary: text('Item'),
+      children: text('Body'),
+    });
+
+    const toggle = screen.getByTestId('item-toggle');
+    await userEvent.click(toggle);
+    await userEvent.click(toggle);
+
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByTestId('item-content')).toHaveAttribute('hidden', 'until-found');
+  });
+
+  it('points the toggle at the region it controls', () => {
+    render(CollapsibleCard, {
+      id: 'item-1',
+      testId: 'item',
+      summary: text('Item'),
+      children: text('Body'),
+    });
+
+    expect(screen.getByTestId('item-toggle')).toHaveAttribute('aria-controls', 'item-content');
+    expect(screen.getByTestId('item-content')).toHaveAttribute('id', 'item-content');
+  });
+
+  it('expands when navigation or a deep link reveals it, without a click', async () => {
+    render(CollapsibleCard, {
+      id: 'item-1',
+      testId: 'item',
+      summary: text('Item'),
+      children: text('Body'),
+    });
+
+    // `section-tracker.ts` dispatches this at the target id before it scrolls to it, so a
+    // sidebar click or a deep link on first load opens the card rather than scrolling to a
+    // closed one.
+    document.getElementById('item-1')?.dispatchEvent(new CustomEvent('apibox-reveal'));
+    await tick();
+
+    expect(screen.getByTestId('item-toggle')).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByTestId('item-content')).not.toHaveAttribute('hidden');
+  });
+
+  it('expands when a browser find-in-page match lands inside it', async () => {
+    render(CollapsibleCard, {
+      id: 'item-1',
+      testId: 'item',
+      summary: text('Item'),
+      children: text('Body'),
+    });
+
+    // Chrome fires `beforematch` on the hidden element itself; the card must open rather
+    // than leave the match sitting inside a still-collapsed region.
+    screen.getByTestId('item-content').dispatchEvent(new Event('beforematch'));
+    await tick();
+
+    expect(screen.getByTestId('item-toggle')).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByTestId('item-content')).not.toHaveAttribute('hidden');
   });
 });

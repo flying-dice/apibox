@@ -5,6 +5,7 @@ import { render, screen } from '@testing-library/svelte';
 import { describe, expect, it } from 'vitest';
 import AsyncApiDocument from './asyncapi/AsyncApiDocument.svelte';
 import JsonRpcDocument from './jsonrpc/JsonRpcDocument.svelte';
+import JsonSchemaDocument from './jsonschema/JsonSchemaDocument.svelte';
 
 async function example(filename: string) {
   const path = resolve(import.meta.dirname, '../../../../examples', filename);
@@ -42,6 +43,21 @@ describe('remaining format renderers', () => {
     expect(
       screen.getByTestId('jsonrpc-document-method-getbalance-example-0-request'),
     ).toHaveTextContent('getBalance');
+  });
+
+  it("renders a JSON Schema document's root schema, named definitions and badge/labels", async () => {
+    const document = await example('user-profile.schema.json');
+    if (document.kind !== 'jsonschema') throw new Error('Expected a JSON Schema fixture.');
+    render(JsonSchemaDocument, { document });
+
+    expect(screen.getByTestId('jsonschema-document-header-kind')).toHaveTextContent('JSON Schema');
+    expect(screen.getByTestId('jsonschema-document-header-version')).toHaveTextContent('Dialect');
+    expect(screen.getByTestId('jsonschema-document-header-version')).toHaveTextContent('2020-12');
+    expect(screen.getByTestId('jsonschema-document-root')).toBeInTheDocument();
+    expect(screen.getByTestId('jsonschema-document-schemas-title')).toHaveTextContent(
+      'Definitions',
+    );
+    expect(screen.getByTestId('jsonschema-document-schemas-0')).toHaveTextContent('Address');
   });
 
   it('keeps hooks unique when JSON-RPC parameters and errors repeat identifiers', async () => {

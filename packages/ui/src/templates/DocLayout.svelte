@@ -27,7 +27,8 @@
   .layout {
     display: grid;
     grid-template-columns: minmax(13rem, 17rem) minmax(0, 1fr);
-    min-height: 100%;
+    min-height: 100vh;
+    min-height: 100dvh;
     color: var(--apibox-fg);
     background: var(--apibox-bg);
   }
@@ -36,23 +37,36 @@
     grid-template-columns: minmax(13rem, 17rem) minmax(0, 1fr) minmax(10rem, 14rem);
   }
 
-  .sidebar,
   .right-rail {
     position: sticky;
     top: 0;
     align-self: start;
-    max-height: 100vh;
+    height: 100vh;
+    height: 100dvh;
     padding: var(--apibox-space-4);
     overflow-y: auto;
     background: var(--apibox-bg-sunken);
-  }
-
-  .sidebar {
-    border-right: 1px solid var(--apibox-border);
-  }
-
-  .right-rail {
     border-left: 1px solid var(--apibox-border);
+  }
+
+  /*
+   * The sidebar is a floating card, not a full-height rail: it follows the height of its own
+   * navigation and caps out rather than stretching an empty sunken column on short documents.
+   * The margin on every side is what makes it read as a card on the page background, so the
+   * sticky offset and max-height both have to account for it.
+   */
+  .sidebar {
+    position: sticky;
+    top: var(--apibox-space-4);
+    align-self: start;
+    max-height: calc(100vh - var(--apibox-space-4) * 2);
+    max-height: calc(100dvh - var(--apibox-space-4) * 2);
+    margin: var(--apibox-space-4);
+    padding: var(--apibox-space-4);
+    overflow-y: auto;
+    background: var(--apibox-bg-sunken);
+    border: 1px solid var(--apibox-border);
+    border-radius: var(--apibox-radius-lg);
   }
 
   .content {
@@ -80,8 +94,11 @@
     .right-rail {
       position: static;
       display: block;
+      height: auto;
       max-height: none;
+      margin: 0;
       border: 0;
+      border-radius: 0;
       border-bottom: 1px solid var(--apibox-border);
     }
 

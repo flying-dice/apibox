@@ -54,11 +54,17 @@
 
 <style>
   .document,
-  .operations,
-  .group {
+  .operations {
     display: flex;
     flex-direction: column;
     gap: var(--apibox-space-5);
+  }
+
+  /* No gap between rows: the hairline in CollapsibleCard carries the separation. */
+  .group {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
   }
 
   .document {
@@ -75,6 +81,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--apibox-space-2);
+    margin-bottom: var(--apibox-space-4);
   }
 
   h2,

@@ -2,6 +2,7 @@
   import { defineMeta } from '@storybook/addon-svelte-csf';
   import type { SchemaNode } from '@apibox/core';
   import CodeBlock from './CodeBlock.svelte';
+  import CollapsibleCard from './CollapsibleCard.svelte';
   import KeyValueRow from './KeyValueRow.svelte';
   import NavItem from './NavItem.svelte';
   import PropertyRow from './PropertyRow.svelte';
@@ -129,6 +130,30 @@
       />
       <SchemaTypeLabel schema={{ types: ['object'], refName: 'Pet', circularRef: 'Pet' }} />
       <SchemaTypeLabel schema={{ types: [], unresolvedRef: 'https://example.invalid/x.yaml' }} />
+    </div>
+  </div>
+</Story>
+
+<Story name="Collapsible cards">
+  <div class="sheet">
+    <p class="note">
+      The primitive behind every top-level operation, method and schema entry: collapsed by
+      default, independent per instance, and reachable by header click, sidebar navigation or
+      a deep link.
+    </p>
+    <div class="stack">
+      <CollapsibleCard id="story-item-1" testId="story-item-1">
+        {#snippet summary()}
+          <strong>GET</strong> <span>/pets</span>
+        {/snippet}
+        <p>Body content, hidden until the card is opened.</p>
+      </CollapsibleCard>
+      <CollapsibleCard id="story-item-2" testId="story-item-2">
+        {#snippet summary()}
+          <strong>POST</strong> <span>/pets</span>
+        {/snippet}
+        <p>Opening one card never closes another.</p>
+      </CollapsibleCard>
     </div>
   </div>
 </Story>

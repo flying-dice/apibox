@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { AsyncApiDocument, DocLayout, JsonRpcDocument, NavItem, OpenApiDocument, SearchInput } from '@apibox/ui';
+  import { AsyncApiDocument, DocLayout, JsonRpcDocument, JsonSchemaDocument, NavItem, OpenApiDocument, SearchInput } from '@apibox/ui';
   import { onMount } from 'svelte';
   import type { Snippet } from 'svelte';
   import type { DataSource } from './data-source.js';
@@ -152,32 +152,18 @@
       <AsyncApiDocument document={currentDocument} />
     {:else if currentDocument?.kind === 'jsonrpc'}
       <JsonRpcDocument document={currentDocument} />
+    {:else if currentDocument?.kind === 'jsonschema'}
+      <JsonSchemaDocument document={currentDocument} />
     {:else}
       <section class="empty-workspace" data-testid="viewer-empty-workspace">
         <span class="empty-kicker" data-testid="viewer-empty-workspace-kicker">Ready when you are</span>
         <h1 data-testid="viewer-empty-workspace-title">Import your first API description</h1>
         <p data-testid="viewer-empty-workspace-description">
-          Add OpenAPI, AsyncAPI or OpenRPC files from the workspace controls. Your files stay in
-          this browser.
+          Add OpenAPI, AsyncAPI, OpenRPC or JSON Schema files from the workspace controls. Your
+          files stay in this browser.
         </p>
       </section>
     {/if}
-
-    {#snippet rightRail()}
-      {#if currentDocument}
-        <nav class="on-page" aria-label="On this page" data-testid="viewer-on-page">
-          {#each currentDocument.nav as node (node.id)}
-            <NavItem
-              href={navigation.router.href({ documentId: currentDocument.id, sectionId: node.id })}
-              label={node.label}
-              current={session.currentSection === node.id}
-              testId="viewer-on-page-{node.id}"
-              onnavigate={() => navigateToSection(node.id)}
-            />
-          {/each}
-        </nav>
-      {/if}
-    {/snippet}
   </DocLayout>
 {/if}
 
@@ -197,8 +183,7 @@
   }
 
   .sidebar-content,
-  .documents,
-  .on-page {
+  .documents {
     display: flex;
     flex-direction: column;
     gap: var(--apibox-space-3);

@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { RpcMethod } from '@apibox/core';
+  import CollapsibleCard from '../../molecules/CollapsibleCard.svelte';
   import Badge from '../../atoms/Badge.svelte';
   import SchemaViewer from '../../organisms/SchemaViewer.svelte';
   import RpcExamplePair from './RpcExamplePair.svelte';
@@ -12,14 +13,15 @@
   const { method, testId }: Props = $props();
 </script>
 
-<article id={method.id} class="card" data-testid={testId}>
-  <header data-testid="{testId}-header">
+<CollapsibleCard id={method.id} {testId}>
+  {#snippet summary()}
     <Badge tone="info" deprecated={method.deprecated} testId="{testId}-kind">RPC</Badge>
-    <h3 data-testid="{testId}-name">{method.name}</h3>
+    <span data-testid="{testId}-name">{method.name}</span>
     <Badge variant="outline" testId="{testId}-param-structure">
       {method.paramStructure}
     </Badge>
-  </header>
+  {/snippet}
+
   {#if method.summary}
     <p data-testid="{testId}-summary"><strong>{method.summary}</strong></p>
   {/if}
@@ -95,36 +97,23 @@
       {/each}
     </section>
   {/if}
-</article>
+</CollapsibleCard>
 
 <style>
-  .card,
-  .card > section,
+  section,
   .schema {
     display: flex;
     flex-direction: column;
     gap: var(--apibox-space-4);
   }
 
-  .card,
   .schema {
     padding: var(--apibox-space-4);
+    background: var(--apibox-bg-sunken);
     border: 1px solid var(--apibox-border);
     border-radius: var(--apibox-radius-lg);
   }
 
-  .schema {
-    background: var(--apibox-bg-sunken);
-  }
-
-  header {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--apibox-space-3);
-    align-items: center;
-  }
-
-  h3,
   h4,
   h5,
   p {

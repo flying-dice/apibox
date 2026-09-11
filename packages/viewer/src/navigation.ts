@@ -5,7 +5,7 @@ import { createSectionTracker } from './section-tracker.js';
 
 export interface ViewerNavigation {
   router: HashRouter;
-  createSectionTracker(onSectionChange: (sectionId: string) => void): SectionTracker;
+  createSectionTracker(onSectionChange: (sectionId: string | undefined) => void): SectionTracker;
 }
 
 export function createBrowserNavigation(target: Window): ViewerNavigation {
