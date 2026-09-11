@@ -180,6 +180,209 @@ describe('normaliseSchema', () => {
     expect(normaliseSchema(true)?.types).toEqual([]);
     expect(normaliseSchema(false)?.types).toEqual(['never']);
   });
+
+  it('renders a draft-04 boolean exclusiveMinimum/exclusiveMaximum against the bound it qualifies', () => {
+    const exclusive = normaliseSchema({
+      type: 'integer',
+      minimum: 0,
+      exclusiveMinimum: true,
+      maximum: 100,
+      exclusiveMaximum: true,
+    });
+    expect(exclusive?.constraints).toEqual([
+      { label: 'exclusive min', value: '0' },
+      { label: 'exclusive max', value: '100' },
+    ]);
+
+    // `false` means the bound is inclusive — the ordinary "min"/"max" label, not a bogus
+    // "exclusive min: false" chip.
+    const inclusive = normaliseSchema({
+      type: 'integer',
+      minimum: 0,
+      exclusiveMinimum: false,
+      maximum: 100,
+      exclusiveMaximum: false,
+    });
+    expect(inclusive?.constraints).toEqual([
+      { label: 'min', value: '0' },
+      { label: 'max', value: '100' },
+    ]);
+  });
+
+  it('keeps the draft-06+ numeric exclusiveMinimum/exclusiveMaximum as its own chip', () => {
+    const node = normaliseSchema({
+      type: 'integer',
+      minimum: 0,
+      exclusiveMinimum: -1,
+      maximum: 100,
+      exclusiveMaximum: 101,
+    });
+    expect(node?.constraints).toEqual([
+      { label: 'min', value: '0' },
+      { label: 'exclusive min', value: '-1' },
+      { label: 'max', value: '100' },
+      { label: 'exclusive max', value: '101' },
+    ]);
+  });
+
+  it('omits a draft-04 exclusive flag with no accompanying bound rather than inventing one', () => {
+    const node = normaliseSchema({ type: 'integer', exclusiveMinimum: true });
+    expect(node?.constraints).toBeUndefined();
+  });
+
+  it('preserves if/then/else as a conditional triple rather than resolving a branch', () => {
+    const node = normaliseSchema({
+      if: { properties: { country: { const: 'US' } } },
+      // biome-ignore lint/suspicious/noThenProperty: JSON Schema keyword, not a thenable.
+      then: { required: ['zip'] },
+      else: { required: ['postalCode'] },
+    });
+    expect(node?.conditional?.if.properties?.[0]?.name).toBe('country');
+    expect(node?.conditional?.then?.properties?.[0]?.name).toBe('zip');
+    expect(node?.conditional?.else?.properties?.[0]?.name).toBe('postalCode');
+  });
+
+  it('leaves `then`/`else` undefined when the document declared neither', () => {
+    const node = normaliseSchema({ if: { type: 'string' } });
+    expect(node?.conditional?.then).toBeUndefined();
+    expect(node?.conditional?.else).toBeUndefined();
+  });
+
+  it('keeps patternProperties keyed by the regex they govern', () => {
+    const node = normaliseSchema({
+      type: 'object',
+      patternProperties: { '^S_': { type: 'string' }, '^I_': { type: 'integer' } },
+    });
+    expect(node?.patternProperties?.map((p) => [p.pattern, p.schema.types])).toEqual([
+      ['^S_', ['string']],
+      ['^I_', ['integer']],
+    ]);
+  });
+
+  it('captures propertyNames as its own schema', () => {
+    const node = normaliseSchema({ type: 'object', propertyNames: { pattern: '^[a-z]+$' } });
+    expect(node?.propertyNames?.constraints).toEqual([{ label: 'pattern', value: '^[a-z]+$' }]);
+  });
+
+  it('captures contains, minContains and maxContains together', () => {
+    const node = normaliseSchema({
+      type: 'array',
+      contains: { type: 'integer' },
+      minContains: 1,
+      maxContains: 3,
+    });
+    expect(node?.contains?.types).toEqual(['integer']);
+    expect(node?.constraints).toEqual([
+      { label: 'min contains', value: '1' },
+      { label: 'max contains', value: '3' },
+    ]);
+  });
+
+  it('records dependentRequired as which property triggers which requirement', () => {
+    const node = normaliseSchema({
+      type: 'object',
+      dependentRequired: { creditCard: ['billingAddress', 'cvv'] },
+    });
+    expect(node?.dependentRequired).toEqual([
+      { property: 'creditCard', requires: ['billingAddress', 'cvv'] },
+    ]);
+  });
+
+  it('captures dependentSchemas keyed by the property that triggers them', () => {
+    const node = normaliseSchema({
+      type: 'object',
+      dependentSchemas: { creditCard: { required: ['cvv'] } },
+    });
+    expect(node?.dependentSchemas?.[0]?.property).toBe('creditCard');
+    expect(node?.dependentSchemas?.[0]?.schema.properties?.[0]?.name).toBe('cvv');
+  });
+
+  it('distinguishes closed, open and schema-typed unevaluatedProperties, like additionalProperties', () => {
+    expect(normaliseSchema({ unevaluatedProperties: false })?.allowsUnevaluatedProperties).toBe(
+      false,
+    );
+    expect(normaliseSchema({ unevaluatedProperties: true })?.allowsUnevaluatedProperties).toBe(
+      true,
+    );
+    const typed = normaliseSchema({ unevaluatedProperties: { type: 'string' } });
+    expect(typed?.allowsUnevaluatedProperties).toBe(true);
+    expect(typed?.unevaluatedProperties?.types).toEqual(['string']);
+  });
+
+  it('captures unevaluatedItems the same way', () => {
+    const node = normaliseSchema({ unevaluatedItems: { type: 'boolean' } });
+    expect(node?.allowsUnevaluatedItems).toBe(true);
+    expect(node?.unevaluatedItems?.types).toEqual(['boolean']);
+  });
+
+  it('captures x-* extensions verbatim, in declaration order', () => {
+    const node = normaliseSchema({
+      type: 'string',
+      'x-internal-id': 42,
+      'x-nullable-legacy': true,
+    });
+    expect(node?.extensions).toEqual([
+      { key: 'x-internal-id', value: 42 },
+      { key: 'x-nullable-legacy', value: true },
+    ]);
+  });
+
+  it('does not treat an ordinary keyword as an extension', () => {
+    const node = normaliseSchema({ type: 'string', example: 'x' });
+    expect(node?.extensions).toBeUndefined();
+  });
+
+  it('reads discriminator propertyName and mapping, resolving $ref targets to component names', () => {
+    const cat: Record<string, unknown> = {
+      type: 'object',
+      properties: { species: { type: 'string' } },
+    };
+    const dog: Record<string, unknown> = {
+      type: 'object',
+      properties: { species: { type: 'string' } },
+    };
+    const names = new Map([
+      [cat, 'Cat'],
+      [dog, 'Dog'],
+    ]);
+
+    const node = normaliseSchema(
+      {
+        oneOf: [cat, dog],
+        discriminator: {
+          propertyName: 'species',
+          mapping: {
+            cat: '#/components/schemas/Cat',
+            dog: 'Dog',
+            fish: '#/components/schemas/Fish',
+          },
+        },
+      },
+      { names },
+    );
+
+    expect(node?.discriminator?.propertyName).toBe('species');
+    expect(node?.discriminator?.mapping).toEqual([
+      { value: 'cat', target: '#/components/schemas/Cat', resolvedName: 'Cat' },
+      // A bare component name is also a legal mapping target, not only a $ref pointer.
+      { value: 'dog', target: 'Dog', resolvedName: 'Dog' },
+      // A target that matches no known component is kept verbatim rather than dropped.
+      { value: 'fish', target: '#/components/schemas/Fish', resolvedName: undefined },
+    ]);
+  });
+
+  it('reads a discriminator with no mapping', () => {
+    const node = normaliseSchema({
+      oneOf: [{ type: 'object' }, { type: 'object' }],
+      discriminator: { propertyName: 'kind' },
+    });
+    expect(node?.discriminator).toEqual({ propertyName: 'kind', mapping: undefined });
+  });
+
+  it('ignores a discriminator with no propertyName', () => {
+    const node = normaliseSchema({ oneOf: [{ type: 'string' }], discriminator: {} });
+    expect(node?.discriminator).toBeUndefined();
+  });
 });
 
 describe('schemaTypeLabel', () => {

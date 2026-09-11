@@ -1,5 +1,5 @@
 import type { Composition, SchemaConstraint, SchemaNode } from './types.js';
-import { asString } from './utils.js';
+import { asRecord, asString } from './utils.js';
 
 /**
  * Keywords rendered as constraint chips rather than as structure, in the order they
@@ -10,14 +10,15 @@ const CONSTRAINT_KEYS: Array<[key: string, label: string]> = [
   ['pattern', 'pattern'],
   ['minLength', 'min length'],
   ['maxLength', 'max length'],
-  ['minimum', 'min'],
-  ['maximum', 'max'],
-  ['exclusiveMinimum', 'exclusive min'],
-  ['exclusiveMaximum', 'exclusive max'],
+  // `minimum`/`maximum` and their exclusive counterparts are handled separately, by
+  // `boundConstraints` below — draft-04 spells the exclusive flag as a boolean qualifying
+  // the bound, not a value in its own right, so they cannot be stringified generically.
   ['multipleOf', 'multiple of'],
   ['minItems', 'min items'],
   ['maxItems', 'max items'],
   ['uniqueItems', 'unique items'],
+  ['minContains', 'min contains'],
+  ['maxContains', 'max contains'],
   ['minProperties', 'min properties'],
   ['maxProperties', 'max properties'],
 ];
@@ -216,6 +217,105 @@ function walk(
   }
   if (compositions.length > 0) node.compositions = compositions;
 
+  // `if`/`then`/`else` describe a conditional, not an alternative to pick from — kept as
+  // its own field rather than folded into `compositions`, so a reader is never told "one of
+  // these" about branches that are not actually alternatives.
+  if (schema.if !== undefined) {
+    node.conditional = {
+      if: walk(schema.if, undefined, undefined, child),
+      // biome-ignore lint/suspicious/noThenProperty: mirrors the JSON Schema keyword `then`; never awaited or dynamically imported.
+      then: schema.then !== undefined ? walk(schema.then, undefined, undefined, child) : undefined,
+      else: schema.else !== undefined ? walk(schema.else, undefined, undefined, child) : undefined,
+    };
+  }
+
+  const patternProperties = asRecord(schema.patternProperties);
+  if (patternProperties) {
+    const entries = Object.entries(patternProperties);
+    if (entries.length > 0) {
+      node.patternProperties = entries.map(([pattern, value]) => ({
+        pattern,
+        schema: walk(value, undefined, undefined, child),
+      }));
+    }
+  }
+
+  if (schema.propertyNames !== undefined) {
+    node.propertyNames = walk(schema.propertyNames, undefined, undefined, child);
+  }
+
+  if (schema.contains !== undefined) {
+    node.contains = walk(schema.contains, undefined, undefined, child);
+  }
+
+  const dependentRequired = asRecord(schema.dependentRequired);
+  if (dependentRequired) {
+    const entries = Object.entries(dependentRequired)
+      .filter((entry): entry is [string, unknown[]] => Array.isArray(entry[1]))
+      .map(([property, requires]) => ({
+        property,
+        requires: requires.filter((r): r is string => typeof r === 'string'),
+      }));
+    if (entries.length > 0) node.dependentRequired = entries;
+  }
+
+  const dependentSchemas = asRecord(schema.dependentSchemas);
+  if (dependentSchemas) {
+    const entries = Object.entries(dependentSchemas);
+    if (entries.length > 0) {
+      node.dependentSchemas = entries.map(([property, value]) => ({
+        property,
+        schema: walk(value, undefined, undefined, child),
+      }));
+    }
+  }
+
+  // `unevaluatedProperties`/`unevaluatedItems` follow the same open/closed/typed shape as
+  // `additionalProperties` — a boolean, or a schema constraining whatever was not already
+  // accounted for by `properties`/`patternProperties`/`items`/composition.
+  const unevaluatedProperties = schema.unevaluatedProperties;
+  if (typeof unevaluatedProperties === 'boolean') {
+    node.allowsUnevaluatedProperties = unevaluatedProperties;
+  } else if (unevaluatedProperties && typeof unevaluatedProperties === 'object') {
+    node.allowsUnevaluatedProperties = true;
+    node.unevaluatedProperties = walk(unevaluatedProperties, undefined, undefined, child);
+  }
+
+  const unevaluatedItems = schema.unevaluatedItems;
+  if (typeof unevaluatedItems === 'boolean') {
+    node.allowsUnevaluatedItems = unevaluatedItems;
+  } else if (unevaluatedItems && typeof unevaluatedItems === 'object') {
+    node.allowsUnevaluatedItems = true;
+    node.unevaluatedItems = walk(unevaluatedItems, undefined, undefined, child);
+  }
+
+  // `x-*` specification extensions. Captured wherever a schema carries one, not only at a
+  // document root, since a schema is routinely reused and re-read independent of its
+  // document — see `isExtensionKey` in formats/shared.ts for the same rule applied there.
+  const extensionEntries = Object.entries(schema).filter(([key]) => key.startsWith('x-'));
+  if (extensionEntries.length > 0) {
+    node.extensions = extensionEntries.map(([key, value]) => ({ key, value }));
+  }
+
+  const discriminator = asRecord(schema.discriminator);
+  const propertyName = asString(discriminator?.propertyName);
+  if (discriminator && propertyName) {
+    const mapping = asRecord(discriminator.mapping);
+    node.discriminator = {
+      propertyName,
+      mapping: mapping
+        ? Object.entries(mapping).map(([value, target]) => {
+            const targetString = asString(target) ?? String(target);
+            return {
+              value,
+              target: targetString,
+              resolvedName: resolveDiscriminatorTarget(targetString, frame.options.names),
+            };
+          })
+        : undefined,
+    };
+  }
+
   // A schema with properties but no declared type is an object in all but name.
   if (node.types.length === 0) {
     if (node.properties || node.additionalProperties) node.types = ['object'];
@@ -223,6 +323,28 @@ function walk(
   }
 
   return node;
+}
+
+/**
+ * Resolve a discriminator mapping target to the component name it names.
+ *
+ * OpenAPI permits `mapping` values to be either a bare component name (`Cat`) or a `$ref`
+ * pointer (`#/components/schemas/Cat`) — both spellings are legal, and a pointer's final
+ * path segment is the candidate name either way. `names` maps dereferenced schema *objects*
+ * to their component name, not name strings to names, so there is no cheaper lookup than
+ * checking membership; mapping lists are short in practice.
+ */
+function resolveDiscriminatorTarget(
+  target: string,
+  names: Map<object, string> | undefined,
+): string | undefined {
+  if (!names) return undefined;
+  const candidate = target.includes('/') ? target.split('/').pop() : target;
+  if (!candidate) return undefined;
+  for (const name of names.values()) {
+    if (name === candidate) return name;
+  }
+  return undefined;
 }
 
 function toTypes(schema: Record<string, unknown>): string[] {
@@ -247,11 +369,44 @@ function toExamples(schema: Record<string, unknown>): unknown[] {
 
 function toConstraints(schema: Record<string, unknown>): SchemaConstraint[] {
   const out: SchemaConstraint[] = [];
+  out.push(...pushBound(schema, 'minimum', 'exclusiveMinimum', 'min'));
+  out.push(...pushBound(schema, 'maximum', 'exclusiveMaximum', 'max'));
   for (const [key, label] of CONSTRAINT_KEYS) {
     const value = schema[key];
     if (value === undefined || value === null || value === false) continue;
     out.push({ label, value: String(value) });
   }
+  return out;
+}
+
+/**
+ * `minimum`/`maximum` bound chips, accounting for the exclusive flag changing shape between
+ * drafts: draft-04 spells `exclusiveMinimum`/`exclusiveMaximum` as a boolean qualifying
+ * `minimum`/`maximum`, so `exclusiveMinimum: true` alone renders nothing and `minimum: 0` on
+ * its own says "min: 0" rather than the meaningless "exclusive min: true". Draft-06 onward
+ * spells them as standalone numbers, which render as their own chip alongside the bound.
+ * Read by the value's actual runtime type rather than a declared dialect, since a document's
+ * declared dialect and its keyword shapes are not guaranteed to agree.
+ */
+function pushBound(
+  schema: Record<string, unknown>,
+  boundKey: 'minimum' | 'maximum',
+  exclusiveKey: 'exclusiveMinimum' | 'exclusiveMaximum',
+  label: string,
+): SchemaConstraint[] {
+  const bound = schema[boundKey];
+  const exclusive = schema[exclusiveKey];
+  const hasBound = bound !== undefined && bound !== null;
+
+  if (typeof exclusive === 'boolean') {
+    if (!hasBound) return [];
+    return [{ label: exclusive ? `exclusive ${label}` : label, value: String(bound) }];
+  }
+
+  const out: SchemaConstraint[] = [];
+  if (hasBound) out.push({ label, value: String(bound) });
+  if (typeof exclusive === 'number')
+    out.push({ label: `exclusive ${label}`, value: String(exclusive) });
   return out;
 }
 

@@ -17,13 +17,27 @@
   {#if message.contentType}
     <code data-testid="{testId}-content-type">{message.contentType}</code>
   {/if}
+  {#if message.correlationId}
+    <p class="correlation" data-testid="{testId}-correlation-id">
+      Correlation id: <code>{message.correlationId.location ?? 'unspecified'}</code>
+      {#if message.correlationId.description}&mdash; {message.correlationId.description}{/if}
+    </p>
+  {/if}
   {#if message.payload}
     <h5 data-testid="{testId}-payload-title">Payload</h5>
     <SchemaViewer schema={message.payload} testId="{testId}-payload" />
+  {:else if message.payloadSchemaFormat}
+    <p class="non-schema" data-testid="{testId}-payload-format">
+      Payload is {message.payloadSchemaFormat}, not JSON Schema &mdash; not rendered.
+    </p>
   {/if}
   {#if message.headers}
     <h5 data-testid="{testId}-headers-title">Headers</h5>
     <SchemaViewer schema={message.headers} compact testId="{testId}-headers" />
+  {:else if message.headersSchemaFormat}
+    <p class="non-schema" data-testid="{testId}-headers-format">
+      Headers are {message.headersSchemaFormat}, not JSON Schema &mdash; not rendered.
+    </p>
   {/if}
   {#if message.examples?.length}
     <ExampleViewer examples={message.examples} testId="{testId}-examples" />
@@ -49,6 +63,11 @@
 
   code {
     font-family: var(--apibox-font-code);
+    color: var(--apibox-fg-muted);
+  }
+
+  .correlation,
+  .non-schema {
     color: var(--apibox-fg-muted);
   }
 </style>

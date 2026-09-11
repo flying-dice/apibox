@@ -1,4 +1,4 @@
-import { UnsupportedDocumentError } from '../../detect.js';
+import { jsonSchemaDialect, UnsupportedDocumentError } from '../../detect.js';
 import { normaliseSchema } from '../../schema.js';
 import type {
   ExampleValue,
@@ -54,6 +54,10 @@ export async function parseOpenApi(
   }
 
   const specVersion = asString(root.openapi) ?? '3.0.0';
+  // OpenAPI 3.1 only: the root may declare a dialect other than the implicit OpenAPI base
+  // dialect for the JSON Schemas it embeds. Read with the same recogniser a standalone JSON
+  // Schema document's `$schema` uses, so the two report the dialect the same way.
+  const declaredDialect = jsonSchemaDialect(asString(root.jsonSchemaDialect));
   const warnings: string[] = [];
 
   const dereferenced = await dereferenceDocument(root, options.location, warnings);
@@ -86,6 +90,7 @@ export async function parseOpenApi(
     security: parseSecurity(dereferenced.security),
     operations,
     schemas,
+    jsonSchemaDialect: declaredDialect,
     nav: buildNav(operations, tags, schemas),
     warnings,
   };
@@ -248,6 +253,20 @@ function mergeParameters(shared: Parameter[], own: Parameter[]): Parameter[] {
 
 const PARAM_ORDER: ParameterLocation[] = ['path', 'query', 'header', 'cookie'];
 
+/**
+ * OpenAPI's default `style` per parameter location — `form` for query and cookie, `simple`
+ * for path and header. Applied only when the document did not declare `style` itself, so
+ * the effective value is always known even though most parameters never mention it.
+ */
+function defaultStyle(location: ParameterLocation): string {
+  return location === 'query' || location === 'cookie' ? 'form' : 'simple';
+}
+
+/** `explode` defaults to `true` only when the (effective) style is `form`, `false` otherwise. */
+function defaultExplode(style: string): boolean {
+  return style === 'form';
+}
+
 function parseParameters(raw: unknown, names: Map<object, string>): Parameter[] {
   const parsed = asArray(raw)
     .map((entry) => asRecord(entry))
@@ -255,6 +274,12 @@ function parseParameters(raw: unknown, names: Map<object, string>): Parameter[] 
     .map((entry) => {
       const location = (asString(entry.in) ?? 'query') as ParameterLocation;
       const { schema, content } = parseSchemaOrContent(entry, names);
+
+      const declaredStyle = asString(entry.style);
+      const style = declaredStyle ?? defaultStyle(location);
+      const declaredExplode = typeof entry.explode === 'boolean' ? entry.explode : undefined;
+      const explode = declaredExplode ?? defaultExplode(style);
+
       return {
         name: asString(entry.name) as string,
         in: location,
@@ -265,6 +290,12 @@ function parseParameters(raw: unknown, names: Map<object, string>): Parameter[] 
         schema,
         content,
         examples: parseExamples(entry),
+        style: { value: style, declared: declaredStyle !== undefined },
+        explode: { value: explode, declared: declaredExplode !== undefined },
+        // `false` is the default for both and changes nothing a reader needs telling about —
+        // only a `true` declaration is worth a chip.
+        allowReserved: entry.allowReserved === true ? true : undefined,
+        allowEmptyValue: entry.allowEmptyValue === true ? true : undefined,
       } satisfies Parameter;
     });
 

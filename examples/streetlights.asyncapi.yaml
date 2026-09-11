@@ -5,11 +5,33 @@ info:
   description: |
     A small event-driven API for a city's smart streetlights. Lights publish
     telemetry; the city sends them commands.
+  termsOfService: https://example.com/terms
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+  externalDocs:
+    description: Streetlights API guide
+    url: https://example.com/docs/streetlights
+  tags:
+    - name: telemetry
+      description: Readings published by a light.
+      externalDocs:
+        url: https://example.com/docs/telemetry
+    - name: control
+      description: Commands sent to a light.
+defaultContentType: application/json
 servers:
   mosquitto:
     host: test.mosquitto.org
     protocol: mqtt
     description: Public test broker.
+    variables:
+      port:
+        default: '1883'
+        description: Broker port. Use 8883 for TLS.
+        enum: ['1883', '8883']
+    security:
+      - $ref: '#/components/securitySchemes/apiToken'
 channels:
   lightMeasured:
     address: 'smartylighting/streetlights/1/0/event/{streetlightId}/lighting/measured'
@@ -31,28 +53,88 @@ channels:
     messages:
       turnOn:
         $ref: '#/components/messages/TurnOnOff'
+  dimLight:
+    address: 'smartylighting/streetlights/1/0/action/{streetlightId}/dim'
+    title: Dim light
+    description: Request a streetlight to dim, expecting an acknowledgement in reply.
+    parameters:
+      streetlightId:
+        description: The identifier of the streetlight.
+    messages:
+      dimLight:
+        $ref: '#/components/messages/DimLight'
+  dimLightAck:
+    address: 'smartylighting/streetlights/1/0/action/{streetlightId}/dim/ack'
+    title: Dim light acknowledged
+    description: Confirms a dimming request was applied.
+    messages:
+      dimLightAck:
+        $ref: '#/components/messages/DimLightAck'
+  faultReported:
+    address: 'smartylighting/streetlights/1/0/event/{streetlightId}/fault'
+    title: Fault reported
+    description: >
+      Documented ahead of an operation being wired to it -- a light will eventually publish
+      here, but no publish/subscribe operation references it yet.
+    parameters:
+      streetlightId:
+        description: The identifier of the streetlight.
 operations:
   receiveLightMeasurement:
     action: receive
     channel: { $ref: '#/channels/lightMeasured' }
     summary: Receive a lighting measurement.
+    tags:
+      - name: telemetry
   sendTurnOn:
     action: send
     channel: { $ref: '#/channels/turnOn' }
     summary: Turn a streetlight on.
+    tags:
+      - name: control
+    security:
+      - $ref: '#/components/securitySchemes/apiToken'
+  sendDimLight:
+    action: send
+    channel: { $ref: '#/channels/dimLight' }
+    summary: Request a streetlight to dim.
+    tags:
+      - name: control
+    reply:
+      address:
+        location: '$message.header#/correlationId'
+        description: Matches the acknowledgement to the original dimming request.
+      channel: { $ref: '#/channels/dimLightAck' }
+      messages:
+        - $ref: '#/components/messages/DimLightAck'
 components:
+  securitySchemes:
+    apiToken:
+      type: httpApiKey
+      name: X-Api-Token
+      in: header
+      description: A static per-city API token.
   messages:
     LightMeasured:
       name: lightMeasured
       title: Light measured
       summary: Reports the current luminosity of a streetlight.
       contentType: application/json
+      correlationId:
+        location: '$message.header#/correlationId'
+        description: Correlates a reading with the request that triggered it, when polled.
       payload:
         type: object
         required: [lumens, sentAt]
         properties:
           lumens: { type: integer, minimum: 0, description: Current luminosity. }
           sentAt: { type: string, format: date-time, description: When the reading was taken. }
+      examples:
+        - name: Bright afternoon
+          summary: A typical daytime reading.
+          payload:
+            lumens: 900
+            sentAt: '2024-06-01T14:00:00Z'
     TurnOnOff:
       name: turnOnOff
       title: Turn on or off
@@ -67,3 +149,23 @@ components:
             enum: [on, off]
             description: Whether to turn the light on or off.
           sentAt: { type: string, format: date-time }
+    DimLight:
+      name: dimLight
+      title: Dim light
+      summary: Request a streetlight to dim to a given level.
+      contentType: application/json
+      payload:
+        type: object
+        required: [level]
+        properties:
+          level: { type: integer, minimum: 0, maximum: 100, description: Target brightness percentage. }
+    DimLightAck:
+      name: dimLightAck
+      title: Dim light acknowledged
+      summary: Confirms the dimming level that was applied.
+      contentType: application/json
+      payload:
+        type: object
+        required: [level]
+        properties:
+          level: { type: integer, minimum: 0, maximum: 100 }

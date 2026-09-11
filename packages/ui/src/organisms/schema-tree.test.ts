@@ -153,4 +153,39 @@ describe('childNodes', () => {
   it('has a child budget below which width is never truncated', () => {
     expect(CHILD_BUDGET).toBeGreaterThan(20);
   });
+
+  it('expands the new applicator keywords into their own branches', () => {
+    const schema: SchemaNode = {
+      types: ['object'],
+      conditional: {
+        if: { types: ['string'] },
+        // biome-ignore lint/suspicious/noThenProperty: JSON Schema keyword, not a thenable.
+        then: { types: ['string'], name: 'zip' },
+        else: { types: ['string'], name: 'postalCode' },
+      },
+      patternProperties: [{ pattern: '^S_', schema: { types: ['string'] } }],
+      propertyNames: { types: ['string'] },
+      contains: { types: ['integer'] },
+      dependentSchemas: [{ property: 'creditCard', schema: { types: ['object'] } }],
+      unevaluatedProperties: { types: ['string'] },
+      unevaluatedItems: { types: ['boolean'] },
+    };
+
+    expect(childNodes(schema).map((child) => child.key)).toEqual([
+      'if-if',
+      'then-zip',
+      'else-postalCode',
+      'pattern-properties-pattern-S',
+      'property-names',
+      'contains',
+      'dependent-schemas-if-creditCard-is-present',
+      'unevaluated-properties',
+      'unevaluated-items',
+    ]);
+  });
+
+  it('does not expand unevaluatedProperties/unevaluatedItems when they are only a boolean flag', () => {
+    // The boolean form is open/closed, not a schema — there is nothing to descend into.
+    expect(childNodes({ types: ['object'], allowsUnevaluatedProperties: false })).toEqual([]);
+  });
 });

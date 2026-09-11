@@ -78,6 +78,53 @@ export function childNodes(schema: SchemaNode): ChildNode[] {
     }
   }
 
+  // `if`/`then`/`else` are a conditional, not an alternative to pick from, but they still
+  // expand into their own branches the same way a composition option does.
+  if (schema.conditional) {
+    push('if', schema.conditional.if, schema.conditional.if.name ?? 'if');
+    if (schema.conditional.then)
+      push('then', schema.conditional.then, schema.conditional.then.name ?? 'then');
+    if (schema.conditional.else)
+      push('else', schema.conditional.else, schema.conditional.else.name ?? 'else');
+  }
+
+  for (const entry of schema.patternProperties ?? []) {
+    push('pattern-properties', entry.schema, entry.schema.name ?? `pattern: ${entry.pattern}`);
+  }
+
+  if (schema.propertyNames) {
+    children.push({ key: 'property-names', name: 'property names', schema: schema.propertyNames });
+  }
+
+  if (schema.contains) {
+    children.push({ key: 'contains', name: 'contains', schema: schema.contains });
+  }
+
+  for (const entry of schema.dependentSchemas ?? []) {
+    push(
+      'dependent-schemas',
+      entry.schema,
+      entry.schema.name ?? `if "${entry.property}" is present`,
+    );
+  }
+
+  // `unevaluatedProperties`/`unevaluatedItems` are only structural when they carry a schema —
+  // the boolean form is a closed/open flag, rendered elsewhere, not a branch to expand.
+  if (schema.unevaluatedProperties) {
+    children.push({
+      key: 'unevaluated-properties',
+      name: 'unevaluated properties',
+      schema: schema.unevaluatedProperties,
+    });
+  }
+  if (schema.unevaluatedItems) {
+    children.push({
+      key: 'unevaluated-items',
+      name: 'unevaluated items',
+      schema: schema.unevaluatedItems,
+    });
+  }
+
   return children;
 }
 

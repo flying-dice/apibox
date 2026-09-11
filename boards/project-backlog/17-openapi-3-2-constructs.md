@@ -21,3 +21,4 @@ Low impact today, rising as 3.2 adoption grows. Also covers reference-level `sum
 - [ ] `$self`, `oauth2Metadata`, `Example.dataValue`/`serializedValue`
 - [ ] Preserve reference-level summary/description overrides
 - [ ] `xml` object modelling and render
+- [ ] Surface `jsonSchemaDialect` in the document header (parsed by card 23, not yet rendered)

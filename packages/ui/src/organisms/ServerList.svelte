@@ -30,6 +30,16 @@
               {/each}
             </dl>
           {/if}
+          {#if server.security?.length}
+            <p class="security" data-testid="{testId}-{index}-security">
+              Authentication:
+              {#each server.security as requirement, requirementIndex (requirementIndex)}
+                <span data-testid="{testId}-{index}-security-{requirementIndex}">
+                  {requirement.alternatives.map((item) => item.scheme).join(' or ')}
+                </span>
+              {/each}
+            </p>
+          {/if}
         </article>
       {/each}
     </div>
@@ -62,5 +72,11 @@
 
   .server p {
     color: var(--apibox-fg-muted);
+  }
+
+  .security {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--apibox-space-2);
   }
 </style>

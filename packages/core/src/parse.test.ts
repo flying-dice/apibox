@@ -293,6 +293,33 @@ describe('OpenAPI', () => {
     expect(doc.license).toEqual({ name: 'MIT', url: 'https://spdx.org/licenses/MIT.html' });
   });
 
+  it('reads a recognised root jsonSchemaDialect', async () => {
+    const doc = (await parseApiDocument({
+      openapi: '3.1.0',
+      jsonSchemaDialect: 'https://json-schema.org/draft/2019-09/schema',
+      info: { title: 'Dialect', version: '1.0.0' },
+      paths: {},
+    })) as OpenApiDocument;
+    expect(doc.jsonSchemaDialect).toBe('2019-09');
+  });
+
+  it('leaves jsonSchemaDialect undefined when the document declared none, or one apibox does not recognise', async () => {
+    const noDialect = (await parseApiDocument({
+      openapi: '3.1.0',
+      info: { title: 'No Dialect', version: '1.0.0' },
+      paths: {},
+    })) as OpenApiDocument;
+    expect(noDialect.jsonSchemaDialect).toBeUndefined();
+
+    const unrecognised = (await parseApiDocument({
+      openapi: '3.1.0',
+      jsonSchemaDialect: 'https://example.com/custom-dialect',
+      info: { title: 'Custom Dialect', version: '1.0.0' },
+      paths: {},
+    })) as OpenApiDocument;
+    expect(unrecognised.jsonSchemaDialect).toBeUndefined();
+  });
+
   it('collects every operation with a stable id', async () => {
     const doc = await load();
     expect(doc.operations.map((o) => o.id)).toEqual([
@@ -316,7 +343,7 @@ describe('OpenAPI', () => {
   it('orders parameters path, query, header', async () => {
     const doc = await load();
     const listPets = doc.operations.find((o) => o.id === 'listpets');
-    expect(listPets?.parameters.map((p) => p.in)).toEqual(['query', 'query', 'header']);
+    expect(listPets?.parameters.map((p) => p.in)).toEqual(['query', 'query', 'query', 'header']);
   });
 
   it('sorts responses numerically with `default` last', async () => {
@@ -487,11 +514,97 @@ describe('OpenAPI', () => {
     expect(doc.operations).toEqual([]);
     expect(doc.warnings).toContain('The document declares no paths.');
   });
+
+  describe('parameter serialisation', () => {
+    const withParameter = async (parameter: Record<string, unknown>) => {
+      const doc = (await parseApiDocument({
+        openapi: '3.1.0',
+        info: { title: 'S', version: '1.0.0' },
+        paths: {
+          '/a': {
+            get: {
+              operationId: 'a',
+              parameters: [{ name: 'p', schema: { type: 'string' }, ...parameter }],
+              responses: { '200': { description: 'ok' } },
+            },
+          },
+        },
+      })) as OpenApiDocument;
+      return doc.operations[0]?.parameters[0];
+    };
+
+    it('defaults style to `form` for query and cookie, `simple` for path and header, undeclared', async () => {
+      expect(await withParameter({ in: 'query' })).toMatchObject({
+        style: { value: 'form', declared: false },
+      });
+      expect(await withParameter({ in: 'cookie' })).toMatchObject({
+        style: { value: 'form', declared: false },
+      });
+      expect(await withParameter({ in: 'header' })).toMatchObject({
+        style: { value: 'simple', declared: false },
+      });
+      expect(await withParameter({ in: 'path', required: true })).toMatchObject({
+        style: { value: 'simple', declared: false },
+      });
+    });
+
+    it('defaults explode to true only when the effective style is form, undeclared either way', async () => {
+      expect(await withParameter({ in: 'query' })).toMatchObject({
+        explode: { value: true, declared: false },
+      });
+      expect(await withParameter({ in: 'header' })).toMatchObject({
+        explode: { value: false, declared: false },
+      });
+      expect(await withParameter({ in: 'query', style: 'pipeDelimited' })).toMatchObject({
+        style: { value: 'pipeDelimited', declared: true },
+        explode: { value: false, declared: false },
+      });
+    });
+
+    it('marks style and explode as declared when the document states them, even matching the default', async () => {
+      const parameter = await withParameter({ in: 'query', style: 'form', explode: true });
+      expect(parameter).toMatchObject({
+        style: { value: 'form', declared: true },
+        explode: { value: true, declared: true },
+      });
+    });
+
+    it('lets a declared explode override the location default', async () => {
+      // Query defaults to explode: true; declaring false must survive, not be overwritten.
+      const parameter = await withParameter({ in: 'query', explode: false });
+      expect(parameter?.explode).toEqual({ value: false, declared: true });
+    });
+
+    it('captures allowReserved and allowEmptyValue only when declared true', async () => {
+      const declared = await withParameter({
+        in: 'query',
+        allowReserved: true,
+        allowEmptyValue: true,
+      });
+      expect(declared?.allowReserved).toBe(true);
+      expect(declared?.allowEmptyValue).toBe(true);
+
+      const defaulted = await withParameter({ in: 'query' });
+      expect(defaulted?.allowReserved).toBeUndefined();
+      expect(defaulted?.allowEmptyValue).toBeUndefined();
+
+      const explicitlyFalse = await withParameter({
+        in: 'query',
+        allowReserved: false,
+        allowEmptyValue: false,
+      });
+      expect(explicitlyFalse?.allowReserved).toBeUndefined();
+      expect(explicitlyFalse?.allowEmptyValue).toBeUndefined();
+    });
+  });
 });
 
 describe('AsyncAPI', () => {
+  const load = () =>
+    loadApiDocument(examples('streetlights.asyncapi.yaml')) as Promise<AsyncApiDocument>;
+
   it('normalises channels, operations and message payloads', async () => {
-    const doc = (await loadApiDocument(examples('streetlights.asyncapi.yaml'))) as AsyncApiDocument;
+    const doc = await load();
     expect(doc.kind).toBe('asyncapi');
     expect(doc.title).toBe('Streetlights');
     expect(doc.servers[0]).toMatchObject({ name: 'mosquitto', protocol: 'mqtt' });
@@ -506,6 +619,191 @@ describe('AsyncAPI', () => {
 
     expect(doc.operations.some((o) => o.action === 'send')).toBe(true);
     expect(doc.nav.map((n) => n.label)).toContain('Receive');
+  });
+
+  it('reads info-level metadata: terms of service, license url, external docs, tags with their own external docs', async () => {
+    const doc = await load();
+    expect(doc.termsOfService).toBe('https://example.com/terms');
+    expect(doc.license).toEqual({
+      name: 'Apache 2.0',
+      url: 'https://www.apache.org/licenses/LICENSE-2.0.html',
+    });
+    expect(doc.externalDocs).toEqual({
+      url: 'https://example.com/docs/streetlights',
+      description: 'Streetlights API guide',
+    });
+    expect(doc.tags).toEqual([
+      {
+        name: 'telemetry',
+        description: 'Readings published by a light.',
+        externalDocs: { url: 'https://example.com/docs/telemetry', description: undefined },
+      },
+      { name: 'control', description: 'Commands sent to a light.', externalDocs: undefined },
+    ]);
+    expect(doc.defaultContentType).toBe('application/json');
+  });
+
+  it('parses components.securitySchemes and resolves server/operation security back to the scheme name', async () => {
+    const doc = await load();
+    expect(doc.securitySchemes).toEqual([
+      {
+        name: 'apiToken',
+        type: 'httpApiKey',
+        description: 'A static per-city API token.',
+        in: 'header',
+        paramName: 'X-Api-Token',
+        httpScheme: undefined,
+        bearerFormat: undefined,
+        openIdConnectUrl: undefined,
+        flows: undefined,
+      },
+    ]);
+
+    // A `$ref` into `components.securitySchemes` resolves to the same object the component
+    // itself parses to, which is how the scheme's name is recovered -- the requirement
+    // model's own `.scheme().id()` is hard-coded empty by the parser library.
+    expect(doc.servers[0]?.security).toEqual([
+      { alternatives: [{ scheme: 'apiToken', scopes: [] }] },
+    ]);
+    const sendTurnOn = doc.operations.find((o) => o.id === 'sendturnon');
+    expect(sendTurnOn?.security).toEqual([{ alternatives: [{ scheme: 'apiToken', scopes: [] }] }]);
+  });
+
+  it('parses server variables', async () => {
+    const doc = await load();
+    expect(doc.servers[0]?.variables).toEqual([
+      {
+        name: 'port',
+        default: '1883',
+        description: 'Broker port. Use 8883 for TLS.',
+        enum: ['1883', '8883'],
+      },
+    ]);
+  });
+
+  it('parses message examples', async () => {
+    const doc = await load();
+    const receive = doc.operations.find((o) => o.action === 'receive');
+    const example = receive?.messages[0]?.examples?.[0];
+    expect(example?.name).toBe('Bright afternoon');
+    expect(example?.summary).toBe('A typical daytime reading.');
+    expect(example?.value).toEqual({ lumens: 900, sentAt: '2024-06-01T14:00:00Z' });
+  });
+
+  it('parses message correlationId', async () => {
+    const doc = await load();
+    const receive = doc.operations.find((o) => o.action === 'receive');
+    expect(receive?.messages[0]?.correlationId).toEqual({
+      location: '$message.header#/correlationId',
+      description: 'Correlates a reading with the request that triggered it, when polled.',
+    });
+  });
+
+  it('parses operation-level tags and, separately, channel-restricted servers', async () => {
+    const doc = await load();
+    const receive = doc.operations.find((o) => o.action === 'receive');
+    expect(receive?.tags).toEqual(['telemetry']);
+    expect(receive?.channelServers).toEqual(['mosquitto']);
+  });
+
+  it('models operation reply: the reply channel, address location and its message', async () => {
+    const doc = await load();
+    const dim = doc.operations.find((o) => o.id === 'senddimlight');
+    expect(dim?.reply).toMatchObject({
+      channelAddress: expect.stringContaining('dim/ack'),
+      addressLocation: '$message.header#/correlationId',
+      addressDescription: 'Matches the acknowledgement to the original dimming request.',
+    });
+    expect(dim?.reply?.messages[0]?.name).toBe('dimLightAck');
+    expect(dim?.reply?.messages[0]?.payload?.properties?.map((p) => p.name)).toEqual(['level']);
+  });
+
+  it('keeps a channel with no operation referencing it, instead of dropping it', async () => {
+    const doc = await load();
+    const addresses = doc.orphanChannels.map((c) => c.address);
+    // Declared purely for documentation ahead of any operation being wired to it.
+    expect(addresses.some((a) => a.includes('fault'))).toBe(true);
+    // Only reachable via `operation.reply`, never as a top-level operation -- also orphaned.
+    expect(addresses.some((a) => a.includes('dim/ack'))).toBe(true);
+    const fault = doc.orphanChannels.find((c) => c.address.includes('fault'));
+    expect(fault?.parameters.map((p) => p.name)).toEqual(['streetlightId']);
+    expect(fault?.servers).toEqual(['mosquitto']);
+    expect(doc.nav.map((n) => n.label)).toContain('Channels');
+  });
+
+  it('detects a non-JSON-Schema payload (schemaFormat) and does not walk it as JSON Schema', async () => {
+    const doc = (await parseApiDocument({
+      asyncapi: '3.0.0',
+      info: { title: 'Avro test', version: '1.0.0' },
+      channels: {
+        readings: {
+          address: 'readings',
+          messages: { reading: { $ref: '#/components/messages/Reading' } },
+        },
+      },
+      operations: {
+        receiveReadings: { action: 'receive', channel: { $ref: '#/channels/readings' } },
+      },
+      components: {
+        messages: {
+          Reading: {
+            name: 'reading',
+            contentType: 'application/octet-stream',
+            payload: {
+              schemaFormat: 'application/vnd.apache.avro+json;version=1.9.0',
+              schema: {
+                type: 'record',
+                name: 'Reading',
+                fields: [{ name: 'lumens', type: 'int' }],
+              },
+            },
+          },
+        },
+      },
+    })) as AsyncApiDocument;
+
+    const message = doc.operations[0]?.messages[0];
+    // Not walked as JSON Schema: no `properties`, no `type: ['record']` misread as a JSON
+    // Schema type -- the field is absent entirely rather than confidently wrong.
+    expect(message?.payload).toBeUndefined();
+    expect(message?.payloadSchemaFormat).toBe('application/vnd.apache.avro+json;version=1.9.0');
+    expect(doc.warnings).toContainEqual(
+      expect.stringMatching(/payload is application\/vnd\.apache\.avro\+json.*not JSON Schema/),
+    );
+  });
+
+  it('confirms AsyncAPI dereferencing does not have OpenAPI/OpenRPC unresolved-$ref parity: a broken $ref fails the whole document rather than degrading', async () => {
+    // Unlike `dereferenceDocument` (packages/core/src/formats/shared.ts), which resolves
+    // with `continueOnError` and marks only the broken pointer, `@asyncapi/parser` throws
+    // and abandons the entire document on a single dangling `$ref`. This is the confirmed
+    // answer to the "verify dereference warning parity" checklist item -- it is a real gap,
+    // not merely unverified.
+    await expect(
+      parseApiDocument({
+        asyncapi: '3.0.0',
+        info: { title: 'Broken ref', version: '1.0.0' },
+        channels: {
+          readings: {
+            address: 'readings',
+            messages: { reading: { $ref: '#/components/messages/Reading' } },
+          },
+        },
+        operations: {
+          receiveReadings: { action: 'receive', channel: { $ref: '#/channels/readings' } },
+        },
+        components: {
+          messages: {
+            Reading: {
+              name: 'reading',
+              payload: {
+                type: 'object',
+                properties: { external: { $ref: '#/components/schemas/DoesNotExist' } },
+              },
+            },
+          },
+        },
+      }),
+    ).rejects.toThrow(UnsupportedDocumentError);
   });
 });
 

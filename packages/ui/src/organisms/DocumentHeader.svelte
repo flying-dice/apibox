@@ -69,6 +69,13 @@
         </Link>
       </KeyValueRow>
     {/if}
+    {#if document.termsOfService}
+      <KeyValueRow label="Terms of service" testId="{testId}-terms-of-service">
+        <Link href={document.termsOfService} testId="{testId}-terms-of-service-link">
+          Terms of service
+        </Link>
+      </KeyValueRow>
+    {/if}
   </dl>
 
   {#if document.warnings.length > 0}

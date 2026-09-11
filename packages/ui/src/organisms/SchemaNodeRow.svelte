@@ -2,6 +2,7 @@
   import type { SchemaNode } from '@apibox/core';
   import Badge from '../atoms/Badge.svelte';
   import Button from '../atoms/Button.svelte';
+  import Chip from '../atoms/Chip.svelte';
   import Icon from '../atoms/Icon.svelte';
   import PropertyRow from '../molecules/PropertyRow.svelte';
   import SchemaNodeRowSelf from './SchemaNodeRow.svelte';
@@ -95,6 +96,51 @@
         <PropertyRow {schema} {name} testId="{testId}-property" />
       </div>
     </div>
+
+    {#if schema.dependentRequired?.length || schema.extensions?.length}
+      <div class="meta">
+        {#each schema.dependentRequired ?? [] as entry (entry.property)}
+          <Chip
+            label={`requires with "${entry.property}"`}
+            value={entry.requires.join(', ')}
+            testId="{testId}-dependent-required-{entry.property}"
+          />
+        {/each}
+        {#each schema.extensions ?? [] as extension (extension.key)}
+          <Chip
+            label={extension.key}
+            value={typeof extension.value === 'string' ? extension.value : JSON.stringify(extension.value)}
+            code
+            testId="{testId}-extension-{extension.key}"
+          />
+        {/each}
+      </div>
+    {/if}
+
+    {#if schema.discriminator}
+      <!--
+        Rendered as its own block, not folded into `.meta`, because it explains how to pick
+        one of the `oneOf`/`anyOf` children below rather than describing this node itself —
+        a reader needs it read as "here's the rule", not as one more constraint chip among
+        many.
+      -->
+      <div class="discriminator" data-testid="{testId}-discriminator">
+        <Chip
+          label="discriminator"
+          value={schema.discriminator.propertyName}
+          code
+          testId="{testId}-discriminator-property"
+        />
+        {#each schema.discriminator.mapping ?? [] as entry (entry.value)}
+          <Chip
+            label={entry.value}
+            value={entry.resolvedName ?? entry.target}
+            code
+            testId="{testId}-discriminator-mapping-{entry.value}"
+          />
+        {/each}
+      </div>
+    {/if}
   {/if}
 
   {#if expandable && (hideSelf || expanded)}
@@ -162,6 +208,14 @@
   .body {
     flex: 1;
     min-width: 0;
+  }
+
+  .meta,
+  .discriminator {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--apibox-space-2);
+    padding: 0 0 var(--apibox-space-3) var(--apibox-space-6);
   }
 
   .children {

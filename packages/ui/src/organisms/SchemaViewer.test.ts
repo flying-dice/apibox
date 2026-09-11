@@ -275,6 +275,76 @@ describe('SchemaViewer', () => {
     );
   });
 
+  it('renders if/then/else, contains and propertyNames as their own branches', () => {
+    render(SchemaViewer, {
+      schema: {
+        types: ['object'],
+        conditional: {
+          if: { types: ['string'] },
+          // biome-ignore lint/suspicious/noThenProperty: JSON Schema keyword, not a thenable.
+          then: { types: ['string'], name: 'zip' },
+          else: { types: ['string'], name: 'postalCode' },
+        },
+        contains: { types: ['integer'] },
+        propertyNames: { types: ['string'] },
+      },
+    });
+    expect(screen.getByTestId('schema-then-zip-property-name')).toHaveTextContent('zip');
+    expect(screen.getByTestId('schema-else-postalCode-property-name')).toHaveTextContent(
+      'postalCode',
+    );
+    expect(screen.getByTestId('schema-contains-property-name')).toHaveTextContent('contains');
+    expect(screen.getByTestId('schema-property-names-property-name')).toHaveTextContent(
+      'property names',
+    );
+  });
+
+  it('renders dependentRequired and x-* extensions as chips on the owning row', () => {
+    render(SchemaViewer, {
+      schema: {
+        types: ['object'],
+        dependentRequired: [{ property: 'creditCard', requires: ['cvv'] }],
+        extensions: [{ key: 'x-internal-id', value: 42 }],
+      },
+    });
+    expect(screen.getByTestId('schema-root-dependent-required-creditCard')).toHaveTextContent(
+      'cvv',
+    );
+    expect(screen.getByTestId('schema-root-extension-x-internal-id')).toHaveTextContent('42');
+  });
+
+  it('renders a discriminator near the composition it disambiguates, with a resolved mapping', () => {
+    render(SchemaViewer, {
+      schema: {
+        types: [],
+        compositions: [
+          {
+            kind: 'oneOf',
+            options: [
+              { name: 'Cat', refName: 'Cat', types: ['object'] },
+              { name: 'Dog', refName: 'Dog', types: ['object'] },
+            ],
+          },
+        ],
+        discriminator: {
+          propertyName: 'species',
+          mapping: [
+            { value: 'cat', target: '#/components/schemas/Cat', resolvedName: 'Cat' },
+            { value: 'dog', target: '#/components/schemas/Dog', resolvedName: undefined },
+          ],
+        },
+      },
+    });
+
+    expect(screen.getByTestId('schema-root-discriminator-property')).toHaveTextContent('species');
+    // A resolved mapping target shows the catalogue name a reader already knows.
+    expect(screen.getByTestId('schema-root-discriminator-mapping-cat')).toHaveTextContent('Cat');
+    // An unresolved target still shows something rather than being dropped.
+    expect(screen.getByTestId('schema-root-discriminator-mapping-dog')).toHaveTextContent(
+      '#/components/schemas/Dog',
+    );
+  });
+
   it('renders a schema marked recursive by the core normaliser without hanging', () => {
     // Cross-package integration through Core's public API, without coupling this package
     // to Core's private test-fixture layout.

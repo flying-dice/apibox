@@ -154,14 +154,12 @@ var CONSTRAINT_KEYS = [
   ["pattern", "pattern"],
   ["minLength", "min length"],
   ["maxLength", "max length"],
-  ["minimum", "min"],
-  ["maximum", "max"],
-  ["exclusiveMinimum", "exclusive min"],
-  ["exclusiveMaximum", "exclusive max"],
   ["multipleOf", "multiple of"],
   ["minItems", "min items"],
   ["maxItems", "max items"],
   ["uniqueItems", "unique items"],
+  ["minContains", "min contains"],
+  ["maxContains", "max contains"],
   ["minProperties", "min properties"],
   ["maxProperties", "max properties"]
 ];
@@ -295,6 +293,82 @@ function walk(raw, name, required, frame) {
   }
   if (compositions.length > 0)
     node.compositions = compositions;
+  if (schema.if !== undefined) {
+    node.conditional = {
+      if: walk(schema.if, undefined, undefined, child),
+      then: schema.then !== undefined ? walk(schema.then, undefined, undefined, child) : undefined,
+      else: schema.else !== undefined ? walk(schema.else, undefined, undefined, child) : undefined
+    };
+  }
+  const patternProperties = asRecord(schema.patternProperties);
+  if (patternProperties) {
+    const entries = Object.entries(patternProperties);
+    if (entries.length > 0) {
+      node.patternProperties = entries.map(([pattern, value]) => ({
+        pattern,
+        schema: walk(value, undefined, undefined, child)
+      }));
+    }
+  }
+  if (schema.propertyNames !== undefined) {
+    node.propertyNames = walk(schema.propertyNames, undefined, undefined, child);
+  }
+  if (schema.contains !== undefined) {
+    node.contains = walk(schema.contains, undefined, undefined, child);
+  }
+  const dependentRequired = asRecord(schema.dependentRequired);
+  if (dependentRequired) {
+    const entries = Object.entries(dependentRequired).filter((entry) => Array.isArray(entry[1])).map(([property, requires]) => ({
+      property,
+      requires: requires.filter((r) => typeof r === "string")
+    }));
+    if (entries.length > 0)
+      node.dependentRequired = entries;
+  }
+  const dependentSchemas = asRecord(schema.dependentSchemas);
+  if (dependentSchemas) {
+    const entries = Object.entries(dependentSchemas);
+    if (entries.length > 0) {
+      node.dependentSchemas = entries.map(([property, value]) => ({
+        property,
+        schema: walk(value, undefined, undefined, child)
+      }));
+    }
+  }
+  const unevaluatedProperties = schema.unevaluatedProperties;
+  if (typeof unevaluatedProperties === "boolean") {
+    node.allowsUnevaluatedProperties = unevaluatedProperties;
+  } else if (unevaluatedProperties && typeof unevaluatedProperties === "object") {
+    node.allowsUnevaluatedProperties = true;
+    node.unevaluatedProperties = walk(unevaluatedProperties, undefined, undefined, child);
+  }
+  const unevaluatedItems = schema.unevaluatedItems;
+  if (typeof unevaluatedItems === "boolean") {
+    node.allowsUnevaluatedItems = unevaluatedItems;
+  } else if (unevaluatedItems && typeof unevaluatedItems === "object") {
+    node.allowsUnevaluatedItems = true;
+    node.unevaluatedItems = walk(unevaluatedItems, undefined, undefined, child);
+  }
+  const extensionEntries = Object.entries(schema).filter(([key]) => key.startsWith("x-"));
+  if (extensionEntries.length > 0) {
+    node.extensions = extensionEntries.map(([key, value]) => ({ key, value }));
+  }
+  const discriminator = asRecord(schema.discriminator);
+  const propertyName = asString(discriminator?.propertyName);
+  if (discriminator && propertyName) {
+    const mapping = asRecord(discriminator.mapping);
+    node.discriminator = {
+      propertyName,
+      mapping: mapping ? Object.entries(mapping).map(([value, target]) => {
+        const targetString = asString(target) ?? String(target);
+        return {
+          value,
+          target: targetString,
+          resolvedName: resolveDiscriminatorTarget(targetString, frame.options.names)
+        };
+      }) : undefined
+    };
+  }
   if (node.types.length === 0) {
     if (node.properties || node.additionalProperties)
       node.types = ["object"];
@@ -302,6 +376,18 @@ function walk(raw, name, required, frame) {
       node.types = ["array"];
   }
   return node;
+}
+function resolveDiscriminatorTarget(target, names) {
+  if (!names)
+    return;
+  const candidate = target.includes("/") ? target.split("/").pop() : target;
+  if (!candidate)
+    return;
+  for (const name of names.values()) {
+    if (name === candidate)
+      return name;
+  }
+  return;
 }
 function toTypes(schema) {
   const type = schema.type;
@@ -327,12 +413,30 @@ function toExamples(schema) {
 }
 function toConstraints(schema) {
   const out = [];
+  out.push(...pushBound(schema, "minimum", "exclusiveMinimum", "min"));
+  out.push(...pushBound(schema, "maximum", "exclusiveMaximum", "max"));
   for (const [key, label] of CONSTRAINT_KEYS) {
     const value = schema[key];
     if (value === undefined || value === null || value === false)
       continue;
     out.push({ label, value: String(value) });
   }
+  return out;
+}
+function pushBound(schema, boundKey, exclusiveKey, label) {
+  const bound = schema[boundKey];
+  const exclusive = schema[exclusiveKey];
+  const hasBound = bound !== undefined && bound !== null;
+  if (typeof exclusive === "boolean") {
+    if (!hasBound)
+      return [];
+    return [{ label: exclusive ? `exclusive ${label}` : label, value: String(bound) }];
+  }
+  const out = [];
+  if (hasBound)
+    out.push({ label, value: String(bound) });
+  if (typeof exclusive === "number")
+    out.push({ label: `exclusive ${label}`, value: String(exclusive) });
   return out;
 }
 
@@ -513,17 +617,33 @@ async function parseAsyncApi(raw, options = {}) {
   const info = document.info();
   const title = info.title() ?? "Untitled API";
   const version = info.version() ?? "0.0.0";
+  const defaultSchemaFormat = `application/vnd.aai.asyncapi;version=${document.version()}`;
+  const securitySchemeModels = document.components().securitySchemes().all();
+  const securitySchemes = securitySchemeModels.map(toSecuritySchemeInfo);
+  const securitySchemeNames = new Map(securitySchemeModels.map((scheme) => [scheme.json(), scheme.id()]));
   const servers = document.servers().all().map((server) => ({
     name: server.id(),
     url: safe(() => server.url()) ?? server.host?.() ?? "",
     description: server.description(),
-    protocol: server.protocol()
+    protocol: server.protocol(),
+    variables: nonEmpty(safe(() => server.variables().all())?.map((variable) => ({
+      name: variable.id(),
+      default: variable.hasDefaultValue() ? variable.defaultValue() : undefined,
+      description: safe(() => variable.description()),
+      enum: variable.hasAllowedValues() ? variable.allowedValues() : undefined
+    }))),
+    security: toSecurityRequirements(safe(() => server.security()), securitySchemeNames)
   }));
-  const tags = document.info().tags().all().map((tag) => ({ name: tag.name(), description: tag.description() }));
+  const tags = document.info().tags().all().map((tag) => ({
+    name: tag.name(),
+    description: safe(() => tag.description()),
+    externalDocs: tag.hasExternalDocs() ? toExternalDocs(tag.externalDocs()) : undefined
+  }));
   const taken = new Set;
   const operations = document.operations().all().map((operation) => {
     const channel = operation.channels().all()[0];
     const action = operation.action();
+    const reply = safe(() => operation.reply());
     return {
       id: uniqueId(slugify(operation.id() ?? `${action}-${channel?.id() ?? "channel"}`), taken),
       action: action === "send" || action === "publish" ? "send" : "receive",
@@ -532,10 +652,29 @@ async function parseAsyncApi(raw, options = {}) {
       summary: operation.summary(),
       description: operation.description(),
       parameters: channel ? parseChannelParameters(channel) : [],
-      messages: operation.messages().all().map((message) => toMessageInfo(message))
+      messages: operation.messages().all().map((message) => toMessageInfo(message, document.defaultContentType(), defaultSchemaFormat, warnings)),
+      security: toSecurityRequirements(safe(() => operation.security()), securitySchemeNames),
+      tags: nonEmpty(safe(() => operation.tags().all().map((tag) => tag.name()))),
+      channelServers: channel ? nonEmpty(safe(() => channel.servers().all().map((server) => server.id()))) : undefined,
+      reply: reply ? {
+        channelAddress: safe(() => reply.channel()?.address() ?? reply.channel()?.id()),
+        addressLocation: safe(() => reply.address()?.location()),
+        addressDescription: safe(() => reply.address()?.description()),
+        messages: (safe(() => reply.messages().all()) ?? []).map((message) => toMessageInfo(message, document.defaultContentType(), defaultSchemaFormat, warnings))
+      } : undefined
     };
   });
+  const takenChannels = new Set;
+  const orphanChannels = document.channels().all().filter((channel) => (safe(() => channel.operations().all()) ?? []).length === 0).map((channel) => ({
+    id: uniqueId(slugify(channel.id()), takenChannels),
+    address: channel.address() ?? channel.id(),
+    title: safe(() => readTitle(channel)),
+    description: safe(() => channel.description()),
+    parameters: parseChannelParameters(channel),
+    servers: nonEmpty(safe(() => channel.servers().all().map((server) => server.id())))
+  }));
   const schemas = document.components().schemas().all().map((schema) => normaliseSchema(schema.json(), {}, schema.id())).filter((node) => Boolean(node));
+  const license = safe(() => info.license());
   return {
     id: options.id ?? slugify(title),
     kind: "asyncapi",
@@ -548,12 +687,17 @@ async function parseAsyncApi(raw, options = {}) {
       url: info.contact()?.url(),
       email: info.contact()?.email()
     } : undefined),
-    license: info.license() ? { name: info.license()?.name() ?? "" } : undefined,
+    license: license ? { name: license.name(), url: license.hasUrl() ? license.url() : undefined } : undefined,
+    externalDocs: info.hasExternalDocs() ? toExternalDocs(info.externalDocs()) : undefined,
+    termsOfService: info.hasTermsOfService() ? info.termsOfService() : undefined,
     servers,
     tags,
     operations,
     schemas,
-    nav: buildNav(operations, schemas),
+    securitySchemes,
+    defaultContentType: safe(() => document.defaultContentType()),
+    orphanChannels,
+    nav: buildNav(operations, orphanChannels, schemas),
     warnings
   };
 }
@@ -575,16 +719,112 @@ function parameterSchema(parameter) {
   const nested = safe(() => parameter.schema?.()?.json());
   return nested ?? safe(() => parameter.json());
 }
-function toMessageInfo(message) {
+function toMessageInfo(message, defaultContentType, defaultSchemaFormat, warnings) {
+  const name = message.id?.() ?? message.name?.() ?? "message";
+  const payload = normalisePayloadLike(safe(() => message.payload()), defaultSchemaFormat);
+  const headers = normalisePayloadLike(safe(() => message.headers()), defaultSchemaFormat);
+  if (payload.format) {
+    warnings.push(`Message "${name}" payload is ${payload.format}, not JSON Schema \u2014 not rendered.`);
+  }
+  if (headers.format) {
+    warnings.push(`Message "${name}" headers are ${headers.format}, not JSON Schema \u2014 not rendered.`);
+  }
+  const correlationId = safe(() => message.correlationId());
   return {
-    name: message.id?.() ?? message.name?.() ?? "message",
+    name,
     title: safe(() => message.title()),
     summary: safe(() => message.summary()),
     description: safe(() => message.description()),
-    contentType: safe(() => message.contentType()),
-    payload: normaliseSchema(safe(() => message.payload()?.json())),
-    headers: normaliseSchema(safe(() => message.headers()?.json()))
+    contentType: safe(() => message.contentType()) ?? defaultContentType,
+    payload: payload.schema,
+    payloadSchemaFormat: payload.format,
+    headers: headers.schema,
+    headersSchemaFormat: headers.format,
+    examples: toExamples2(safe(() => message.examples().all()) ?? []),
+    correlationId: correlationId ? {
+      location: safe(() => correlationId.location()),
+      description: safe(() => correlationId.description())
+    } : undefined
   };
+}
+function normalisePayloadLike(schema, defaultSchemaFormat) {
+  if (!schema)
+    return {};
+  const format = safe(() => schema.schemaFormat()) ?? defaultSchemaFormat;
+  if (format !== defaultSchemaFormat)
+    return { format };
+  return { schema: normaliseSchema(safe(() => schema.json())) };
+}
+function toExamples2(examples) {
+  if (examples.length === 0)
+    return;
+  return examples.map((example, index) => ({
+    name: example.hasName?.() && example.name() ? example.name() : `Example ${index + 1}`,
+    summary: safe(() => example.summary()),
+    value: example.hasPayload?.() ? example.payload() : safe(() => example.headers()) ?? undefined
+  }));
+}
+function toExternalDocs(docs) {
+  if (!docs)
+    return;
+  return { url: docs.url(), description: safe(() => docs.description()) };
+}
+function toSecurityRequirements(list, schemeNames) {
+  if (!list || list.length === 0)
+    return;
+  return list.map((requirements) => ({
+    alternatives: requirements.all().map((requirement) => {
+      const scheme = requirement.scheme();
+      const name = schemeNames.get(safe(() => scheme.json())) ?? safe(() => scheme.type()) ?? "unknown";
+      return { scheme: name, scopes: requirement.scopes() };
+    })
+  }));
+}
+function toSecuritySchemeInfo(scheme) {
+  const flows = scheme.hasFlows?.() ? safe(() => scheme.flows()) : undefined;
+  return {
+    name: scheme.id(),
+    type: scheme.type(),
+    description: safe(() => scheme.description()),
+    in: scheme.hasIn?.() ? safe(() => scheme.in()) : undefined,
+    paramName: scheme.hasName?.() ? safe(() => scheme.name()) : undefined,
+    httpScheme: scheme.hasScheme?.() ? safe(() => scheme.scheme()) : undefined,
+    bearerFormat: scheme.hasBearerFormat?.() ? safe(() => scheme.bearerFormat()) : undefined,
+    openIdConnectUrl: scheme.hasOpenIdConnectUrl?.() ? safe(() => scheme.openIdConnectUrl()) : undefined,
+    flows: flows ? toFlows(flows) : undefined
+  };
+}
+var OAUTH_FLOW_KINDS = [
+  "authorizationCode",
+  "clientCredentials",
+  "implicit",
+  "password"
+];
+function toFlows(flows) {
+  const out = [];
+  for (const kind of OAUTH_FLOW_KINDS) {
+    const hasMethod = `has${kind[0]?.toUpperCase()}${kind.slice(1)}`;
+    if (!flows[hasMethod]?.())
+      continue;
+    const flow = flows[kind]();
+    if (!flow)
+      continue;
+    const scopes = safe(() => flow.scopes()) ?? {};
+    out.push({
+      kind,
+      authorizationUrl: flow.hasAuthorizationUrl?.() ? safe(() => flow.authorizationUrl()) : undefined,
+      tokenUrl: flow.hasTokenUrl?.() ? safe(() => flow.tokenUrl()) : undefined,
+      refreshUrl: flow.hasRefreshUrl?.() ? safe(() => flow.refreshUrl()) : undefined,
+      scopes: Object.entries(scopes).map(([scopeName, description]) => ({
+        name: scopeName,
+        description
+      }))
+    });
+  }
+  return out.length > 0 ? out : undefined;
+}
+function nonEmpty(list) {
+  return list && list.length > 0 ? list : undefined;
 }
 function safe(read) {
   try {
@@ -593,7 +833,7 @@ function safe(read) {
     return;
   }
 }
-function buildNav(operations, schemas) {
+function buildNav(operations, orphanChannels, schemas) {
   const nav = [];
   for (const action of ["receive", "send"]) {
     const group = operations.filter((operation) => operation.action === action);
@@ -607,6 +847,16 @@ function buildNav(operations, schemas) {
         label: operation.summary ?? operation.channelTitle ?? operation.channelAddress,
         badge: action.toUpperCase(),
         badgeKind: action
+      }))
+    });
+  }
+  if (orphanChannels.length > 0) {
+    nav.push({
+      id: "channels",
+      label: "Channels",
+      children: orphanChannels.map((channel) => ({
+        id: channel.id,
+        label: channel.title ?? channel.address
       }))
     });
   }
@@ -849,6 +1099,7 @@ async function parseOpenApi(raw, options = {}) {
     throw new UnsupportedDocumentError("Swagger 2.0 documents are not supported yet. Convert the document to OpenAPI 3.x " + "first \u2014 for example with `bunx swagger2openapi` \u2014 and open the result.");
   }
   const specVersion = asString(root.openapi) ?? "3.0.0";
+  const declaredDialect = jsonSchemaDialect(asString(root.jsonSchemaDialect));
   const warnings = [];
   const dereferenced = await dereferenceDocument(root, options.location, warnings);
   const names = collectComponentNames(dereferenced);
@@ -877,6 +1128,7 @@ async function parseOpenApi(raw, options = {}) {
     security: parseSecurity(dereferenced.security),
     operations,
     schemas,
+    jsonSchemaDialect: declaredDialect,
     nav: buildNav4(operations, tags, schemas),
     warnings
   };
@@ -1001,10 +1253,20 @@ function mergeParameters(shared, own) {
   return [...shared.filter((p) => !overridden.has(`${p.in}:${p.name}`)), ...own];
 }
 var PARAM_ORDER = ["path", "query", "header", "cookie"];
+function defaultStyle(location) {
+  return location === "query" || location === "cookie" ? "form" : "simple";
+}
+function defaultExplode(style) {
+  return style === "form";
+}
 function parseParameters(raw, names) {
   const parsed = asArray(raw).map((entry) => asRecord(entry)).filter((entry) => Boolean(entry && asString(entry.name))).map((entry) => {
     const location = asString(entry.in) ?? "query";
     const { schema, content } = parseSchemaOrContent(entry, names);
+    const declaredStyle = asString(entry.style);
+    const style = declaredStyle ?? defaultStyle(location);
+    const declaredExplode = typeof entry.explode === "boolean" ? entry.explode : undefined;
+    const explode = declaredExplode ?? defaultExplode(style);
     return {
       name: asString(entry.name),
       in: location,
@@ -1013,7 +1275,11 @@ function parseParameters(raw, names) {
       deprecated: entry.deprecated === true,
       schema,
       content,
-      examples: parseExamples2(entry)
+      examples: parseExamples2(entry),
+      style: { value: style, declared: declaredStyle !== undefined },
+      explode: { value: explode, declared: declaredExplode !== undefined },
+      allowReserved: entry.allowReserved === true ? true : undefined,
+      allowEmptyValue: entry.allowEmptyValue === true ? true : undefined
     };
   });
   return parsed.sort((a, b) => PARAM_ORDER.indexOf(a.in) - PARAM_ORDER.indexOf(b.in));

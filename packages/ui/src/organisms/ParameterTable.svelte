@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Parameter, ParameterLocation } from '@apibox/core';
   import Badge from '../atoms/Badge.svelte';
+  import Chip from '../atoms/Chip.svelte';
   import Code from '../atoms/Code.svelte';
   import SchemaTypeLabel from '../molecules/SchemaTypeLabel.svelte';
 
@@ -11,6 +12,20 @@
 
   const { parameters, testId = 'parameters' }: Props = $props();
   const locations: readonly ParameterLocation[] = ['path', 'query', 'header', 'cookie'];
+
+  /**
+   * Serialisation is only worth a row's screen space when it says something beyond "the
+   * ordinary default applies" — a scalar `string` parameter's `style`/`explode` never
+   * change its wire shape, and most array/object parameters just take the location default.
+   * Show the chip once a reader actually needs it: the schema is array- or object-shaped,
+   * or the document explicitly declared a style/explode value (even one matching the
+   * default — declaring it is itself information, per the parse-layer contract).
+   */
+  function showsSerialisation(parameter: Parameter): boolean {
+    if (parameter.style?.declared || parameter.explode?.declared) return true;
+    const types = parameter.schema?.types ?? [];
+    return types.includes('array') || types.includes('object');
+  }
 </script>
 
 {#if parameters.length > 0}
@@ -56,6 +71,36 @@
                       <SchemaTypeLabel schema={parameter.schema} testId="{testId}-{location}-{index}-type" />
                       {#if parameter.content?.length}
                         <span class="content-types">{parameter.content.map((media) => media.contentType).join(', ')}</span>
+                      {/if}
+                      {#if showsSerialisation(parameter)}
+                        <div class="serialisation" data-testid="{testId}-{location}-{index}-serialisation">
+                          <Chip
+                            label="style"
+                            value={parameter.style?.value ?? ''}
+                            code
+                            testId="{testId}-{location}-{index}-style"
+                          />
+                          <Chip
+                            label="explode"
+                            value={String(parameter.explode?.value ?? false)}
+                            code
+                            testId="{testId}-{location}-{index}-explode"
+                          />
+                          {#if parameter.allowReserved}
+                            <Chip
+                              label="allowReserved"
+                              value="true"
+                              testId="{testId}-{location}-{index}-allow-reserved"
+                            />
+                          {/if}
+                          {#if parameter.allowEmptyValue}
+                            <Chip
+                              label="allowEmptyValue"
+                              value="true"
+                              testId="{testId}-{location}-{index}-allow-empty-value"
+                            />
+                          {/if}
+                        </div>
                       {/if}
                     </td>
                     <td>{parameter.description ?? '—'}</td>
@@ -130,5 +175,12 @@
     margin-top: var(--apibox-space-1);
     font-size: var(--apibox-font-size-sm);
     color: var(--apibox-fg-muted);
+  }
+
+  .serialisation {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--apibox-space-2);
+    margin-top: var(--apibox-space-2);
   }
 </style>

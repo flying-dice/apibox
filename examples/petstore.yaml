@@ -44,6 +44,18 @@ paths:
           description: Only return pets carrying this tag.
           required: false
           schema: { type: string }
+        - name: tags
+          in: query
+          description: >-
+            Filter to pets carrying any of these tags. Repeated as `tags=a&tags=b` rather
+            than comma-joined, since `explode` is declared false here to override the
+            `form` style's own default of `true`.
+          required: false
+          style: form
+          explode: false
+          schema:
+            type: array
+            items: { type: string }
         - name: X-Request-Id
           in: header
           description: Correlation id echoed back on the response.
@@ -183,6 +195,34 @@ components:
         parent:
           description: The pet this one descends from, if known.
           $ref: '#/components/schemas/Pet'
+        companion:
+          description: >-
+            Another animal that travels with this pet, if any. `species` selects which
+            shape applies.
+          oneOf:
+            - $ref: '#/components/schemas/Cat'
+            - $ref: '#/components/schemas/Dog'
+          discriminator:
+            propertyName: species
+            mapping:
+              cat: '#/components/schemas/Cat'
+              dog: '#/components/schemas/Dog'
+    Cat:
+      type: object
+      description: A companion cat.
+      required: [species, name]
+      properties:
+        species: { type: string, enum: [cat] }
+        name: { type: string }
+        livesLeft: { type: integer, minimum: 0, maximum: 9 }
+    Dog:
+      type: object
+      description: A companion dog.
+      required: [species, name]
+      properties:
+        species: { type: string, enum: [dog] }
+        name: { type: string }
+        breed: { type: string }
     NewPet:
       type: object
       description: The fields accepted when creating a pet.
