@@ -1,8 +1,10 @@
 import { jsonSchemaDialect, UnsupportedDocumentError } from '../../detect.js';
 import { normaliseSchema } from '../../schema.js';
 import type {
+  Callback,
   ExampleValue,
   MediaTypeBody,
+  MediaTypeEncoding,
   NavNode,
   OpenApiDocument,
   Operation,
@@ -11,6 +13,7 @@ import type {
   RequestBodyInfo,
   ResponseHeader,
   ResponseInfo,
+  ResponseLink,
   SchemaNode,
   SecurityRequirement,
   SecuritySchemeInfo,
@@ -203,46 +206,149 @@ function parseOperations(
   for (const [path, pathValue] of Object.entries(paths)) {
     const pathItem = asRecord(pathValue);
     if (!pathItem) continue;
+    operations.push(
+      ...parsePathItemOperations(pathItem, names, documentServers, warnings, path, taken, {
+        parseCallbacks: true,
+      }),
+    );
+  }
 
-    // Path-level parameters apply to every operation under the path, unless an operation
-    // declares one with the same name and location.
-    const sharedParameters = parseParameters(pathItem.parameters, names);
-    const pathServers = parseServers(pathItem.servers);
+  // Second pass: an operationRef can point at any operation in the document, including one
+  // parsed after the link that names it, so resolution has to wait until every operation
+  // (top-level and callback) has an id to match against.
+  resolveLinkOperationRefs(operations);
 
-    for (const method of METHODS) {
-      const operationValue = asRecord(pathItem[method]);
-      if (!operationValue) continue;
+  return operations;
+}
 
-      const operationId = asString(operationValue.operationId);
-      const id = uniqueId(slugify(operationId ?? `${method}-${path}`), taken);
-      const ownParameters = parseParameters(operationValue.parameters, names);
-      const ownServers = parseServers(operationValue.servers);
+interface ParsePathItemOptions {
+  /**
+   * Whether to read this Path Item's operations' own `callbacks`. `false` for a callback's
+   * Path Item -- see {@link Operation.callbacks} for why callbacks never nest.
+   */
+  parseCallbacks: boolean;
+}
 
-      operations.push({
-        id,
-        method: method.toUpperCase(),
-        path,
-        operationId,
-        summary: asString(operationValue.summary),
-        description: asString(operationValue.description),
-        deprecated: operationValue.deprecated === true,
-        tags: asArray(operationValue.tags).filter((t): t is string => typeof t === 'string'),
-        servers:
-          ownServers.length > 0
-            ? ownServers
-            : pathServers.length > 0
-              ? pathServers
-              : documentServers,
-        externalDocs: parseExternalDocs(operationValue.externalDocs),
-        parameters: mergeParameters(sharedParameters, ownParameters),
-        requestBody: parseRequestBody(operationValue.requestBody, names),
-        responses: parseResponses(operationValue.responses, names),
-        security: parseSecurity(operationValue.security),
+/**
+ * Parse one Path Item's operations (its `get`, `post`, ... entries). Shared between top-level
+ * `paths` entries and the Path Items nested inside a `callbacks` map, which have the same
+ * shape apart from being keyed by a runtime expression instead of a URL path.
+ */
+function parsePathItemOperations(
+  pathItem: Record<string, unknown>,
+  names: Map<object, string>,
+  documentServers: ServerInfo[],
+  warnings: string[],
+  path: string,
+  taken: Set<string>,
+  options: ParsePathItemOptions,
+): Operation[] {
+  // Path-level parameters apply to every operation under the path, unless an operation
+  // declares one with the same name and location.
+  const sharedParameters = parseParameters(pathItem.parameters, names);
+  const pathServers = parseServers(pathItem.servers);
+
+  const operations: Operation[] = [];
+
+  for (const method of METHODS) {
+    const operationValue = asRecord(pathItem[method]);
+    if (!operationValue) continue;
+
+    const operationId = asString(operationValue.operationId);
+    const id = uniqueId(slugify(operationId ?? `${method}-${path}`), taken);
+    const ownParameters = parseParameters(operationValue.parameters, names);
+    const ownServers = parseServers(operationValue.servers);
+
+    operations.push({
+      id,
+      method: method.toUpperCase(),
+      path,
+      operationId,
+      summary: asString(operationValue.summary),
+      description: asString(operationValue.description),
+      deprecated: operationValue.deprecated === true,
+      tags: asArray(operationValue.tags).filter((t): t is string => typeof t === 'string'),
+      servers:
+        ownServers.length > 0 ? ownServers : pathServers.length > 0 ? pathServers : documentServers,
+      externalDocs: parseExternalDocs(operationValue.externalDocs),
+      parameters: mergeParameters(sharedParameters, ownParameters),
+      requestBody: parseRequestBody(operationValue.requestBody, names),
+      responses: parseResponses(operationValue.responses, names),
+      security: parseSecurity(operationValue.security),
+      callbacks: options.parseCallbacks
+        ? parseCallbacks(operationValue.callbacks, names, warnings, taken)
+        : undefined,
+    });
+  }
+
+  return operations;
+}
+
+function parseCallbacks(
+  raw: unknown,
+  names: Map<object, string>,
+  warnings: string[],
+  taken: Set<string>,
+): Callback[] | undefined {
+  const callbacksRecord = asRecord(raw);
+  if (!callbacksRecord) return undefined;
+
+  const out: Callback[] = [];
+  for (const [callbackName, callbackValue] of Object.entries(callbacksRecord)) {
+    if (isExtensionKey(callbackName)) continue;
+    const expressions = asRecord(callbackValue);
+    if (!expressions) continue;
+
+    for (const [expression, pathItemValue] of Object.entries(expressions)) {
+      if (isExtensionKey(expression)) continue;
+      const pathItem = asRecord(pathItemValue);
+      if (!pathItem) continue;
+
+      out.push({
+        name: callbackName,
+        expression,
+        // `path` has no meaning for a callback -- there is no URL, only the runtime
+        // expression -- so the expression itself stands in for it, the same value a reader
+        // already sees on the callback entry.
+        operations: parsePathItemOperations(pathItem, names, [], warnings, expression, taken, {
+          parseCallbacks: false,
+        }),
       });
     }
   }
 
-  return operations;
+  return out.length > 0 ? out : undefined;
+}
+
+/** Escape a path segment for use inside a JSON Pointer (`~` -> `~0`, `/` -> `~1`). */
+function jsonPointerEscape(segment: string): string {
+  return segment.replace(/~/g, '~0').replace(/\//g, '~1');
+}
+
+/**
+ * Resolve each response link's `operationRef` to the operation it points at, when that
+ * operation exists in this same document. `operationRef` is a JSON Pointer such as
+ * `#/paths/~1pets~1{id}/get`, possibly prefixed with a document URL that dereferencing has
+ * already stripped meaning from -- only the `#/...` fragment is matched.
+ */
+function resolveLinkOperationRefs(operations: Operation[]): void {
+  const byPointer = new Map<string, string>();
+  for (const operation of operations) {
+    if (!operation.operationId) continue;
+    const pointer = `#/paths/${jsonPointerEscape(operation.path)}/${operation.method.toLowerCase()}`;
+    byPointer.set(pointer, operation.operationId);
+  }
+
+  for (const operation of operations) {
+    for (const response of operation.responses) {
+      for (const link of response.links ?? []) {
+        if (!link.operationRef) continue;
+        const hashIndex = link.operationRef.indexOf('#');
+        const fragment = hashIndex >= 0 ? link.operationRef.slice(hashIndex) : link.operationRef;
+        link.resolvedOperationId = byPointer.get(fragment);
+      }
+    }
+  }
 }
 
 /** Operation parameters override path parameters that share a name and location. */
@@ -339,9 +445,45 @@ function parseResponses(raw: unknown, names: Map<object, string>): ResponseInfo[
             })
           : [],
         content: parseContent(response.content, names),
+        links: parseLinks(response.links),
       } satisfies ResponseInfo;
     })
     .sort(compareStatus);
+}
+
+/**
+ * Parse a response's `links` map. `resolvedOperationId` for `operationRef` entries is filled
+ * in later, by {@link resolveLinkOperationRefs}, once every operation in the document has an
+ * id to match against.
+ */
+function parseLinks(raw: unknown): ResponseLink[] | undefined {
+  const links = asRecord(raw);
+  if (!links) return undefined;
+
+  const out = Object.entries(links)
+    .filter(([name]) => !isExtensionKey(name))
+    .map(([name, value]) => {
+      const link = asRecord(value) ?? {};
+      const parameters = asRecord(link.parameters);
+      const server = asRecord(link.server);
+      return {
+        name,
+        description: asString(link.description),
+        operationId: asString(link.operationId),
+        operationRef: asString(link.operationRef),
+        parameters:
+          parameters && Object.keys(parameters).length > 0
+            ? Object.entries(parameters).map(([paramName, paramValue]) => ({
+                name: paramName,
+                value: paramValue,
+              }))
+            : undefined,
+        requestBody: 'requestBody' in link ? link.requestBody : undefined,
+        server: server ? parseServers([server])[0] : undefined,
+      } satisfies ResponseLink;
+    });
+
+  return out.length > 0 ? out : undefined;
 }
 
 /** Numeric codes ascending, with `default` last. */
@@ -384,8 +526,54 @@ function parseContent(raw: unknown, names: Map<object, string>): MediaTypeBody[]
       contentType,
       schema: normaliseSchema(media.schema, { names }),
       examples: parseExamples(media),
+      encoding: parseEncoding(media.encoding, names),
     } satisfies MediaTypeBody;
   });
+}
+
+/**
+ * Parse a multipart/form-urlencoded media type's `encoding` map -- per-property transfer
+ * detail such as "the `avatar` property is sent as `image/png`", otherwise silently dropped.
+ * `style`/`explode` reuse {@link Parameter}'s value/declared shape (see {@link defaultStyle}
+ * and {@link defaultExplode}) even though the "location" those helpers are named for doesn't
+ * apply here -- `form` is `encoding`'s only meaningful default, so it is passed directly.
+ */
+function parseEncoding(raw: unknown, names: Map<object, string>): MediaTypeEncoding[] | undefined {
+  const encoding = asRecord(raw);
+  if (!encoding) return undefined;
+
+  const out = Object.entries(encoding).map(([propertyName, value]) => {
+    const entry = asRecord(value) ?? {};
+    const headers = asRecord(entry.headers);
+    const declaredStyle = asString(entry.style);
+    const style = declaredStyle ?? 'form';
+    const declaredExplode = typeof entry.explode === 'boolean' ? entry.explode : undefined;
+    const explode = declaredExplode ?? defaultExplode(style);
+
+    return {
+      propertyName,
+      contentType: asString(entry.contentType),
+      headers: headers
+        ? Object.entries(headers).map(([name, headerValue]) => {
+            const header = asRecord(headerValue) ?? {};
+            const { schema, content } = parseSchemaOrContent(header, names);
+            return {
+              name,
+              description: asString(header.description),
+              required: header.required === true,
+              deprecated: header.deprecated === true,
+              schema,
+              content,
+            } satisfies ResponseHeader;
+          })
+        : undefined,
+      style: { value: style, declared: declaredStyle !== undefined },
+      explode: { value: explode, declared: declaredExplode !== undefined },
+      allowReserved: entry.allowReserved === true ? true : undefined,
+    } satisfies MediaTypeEncoding;
+  });
+
+  return out.length > 0 ? out : undefined;
 }
 
 /**

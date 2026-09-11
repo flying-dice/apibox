@@ -98,15 +98,51 @@ paths:
               minimal:
                 summary: Minimal pet
                 value: { name: Rex }
+          multipart/form-data:
+            description: >-
+              An alternative shape accepted when the pet's photo is uploaded alongside its
+              other fields, rather than referenced by URL.
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1 }
+                photo: { type: string, format: binary, description: A photo of the pet. }
+            encoding:
+              photo:
+                contentType: image/png, image/jpeg
       responses:
         '201':
           description: The created pet.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Pet' }
+          links:
+            GetCreatedPet:
+              operationId: getPet
+              description: >-
+                Fetch the pet that was just created, using this response's id.
+              parameters:
+                petId: $response.body#/id
         '400': { $ref: '#/components/responses/BadRequest' }
         '409':
           description: A pet with that name already exists.
+      callbacks:
+        onStatusChange:
+          '{$request.body#/webhookUrl}':
+            post:
+              summary: Pet status changed
+              description: >-
+                Sent back to the caller-supplied webhook URL whenever the created pet's
+                status changes.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema: { $ref: '#/components/schemas/Pet' }
+              responses:
+                '200':
+                  description: Acknowledged.
   /pets/{petId}:
     parameters:
       - name: petId

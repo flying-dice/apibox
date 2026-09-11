@@ -8,6 +8,10 @@
   import ParameterTable from './ParameterTable.svelte';
   import RequestBody from './RequestBody.svelte';
   import ResponseList from './ResponseList.svelte';
+  // Self-import: a callback's Path Item is rendered with the same card as a top-level
+  // operation. Naturally bounded -- see Operation.callbacks -- since a callback operation's
+  // own `callbacks` is never populated, so this never recurses more than one level deep.
+  import OperationCard from './OperationCard.svelte';
 
   interface Props {
     operation: Operation;
@@ -59,6 +63,26 @@
   <ParameterTable parameters={operation.parameters} testId="{testId}-parameters" />
   {#if operation.requestBody}<RequestBody body={operation.requestBody} testId="{testId}-request" />{/if}
   <ResponseList responses={operation.responses} testId="{testId}-responses" />
+
+  {#if operation.callbacks?.length}
+    <section class="callbacks" aria-labelledby="{testId}-callbacks-title" data-testid="{testId}-callbacks">
+      <h4 id="{testId}-callbacks-title">Callbacks</h4>
+      {#each operation.callbacks as callback, callbackIndex (`${callback.name}-${callbackIndex}`)}
+        <div class="callback" data-testid="{testId}-callback-{callbackIndex}">
+          <p class="callback-heading" data-testid="{testId}-callback-{callbackIndex}-heading">
+            <strong>{callback.name}</strong>
+            <code>{callback.expression}</code>
+          </p>
+          {#each callback.operations as callbackOperation (callbackOperation.id)}
+            <OperationCard
+              operation={callbackOperation}
+              testId="{testId}-callback-{callbackIndex}-{callbackOperation.id}"
+            />
+          {/each}
+        </div>
+      {/each}
+    </section>
+  {/if}
 </CollapsibleCard>
 
 <style>
@@ -78,6 +102,26 @@
 
   .description,
   .public {
+    color: var(--apibox-fg-muted);
+  }
+
+  .callbacks,
+  .callback {
+    display: flex;
+    flex-direction: column;
+    gap: var(--apibox-space-3);
+  }
+
+  .callback-heading {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--apibox-space-2);
+    align-items: baseline;
+  }
+
+  .callback-heading code {
+    font-family: var(--apibox-font-code);
+    font-size: var(--apibox-font-size-code);
     color: var(--apibox-fg-muted);
   }
 </style>

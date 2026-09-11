@@ -316,6 +316,30 @@ export interface MediaTypeBody {
   contentType: string;
   schema?: SchemaNode;
   examples?: ExampleValue[];
+  /**
+   * `encoding`: per-property transfer detail for a multipart or form-urlencoded body, e.g.
+   * "the `avatar` property is sent as `image/png`". Without it a multipart upload renders
+   * with no indication of each part's content type, which is the whole reason this exists.
+   */
+  encoding?: MediaTypeEncoding[];
+}
+
+export interface MediaTypeEncoding {
+  /** The schema property this encoding entry governs. */
+  propertyName: string;
+  /** The part's content type, when the document declared one explicitly. */
+  contentType?: string;
+  headers?: ResponseHeader[];
+  /**
+   * As {@link Parameter.style}: the effective serialization style with whether the document
+   * declared it. Only meaningful for `application/x-www-form-urlencoded` bodies, but kept
+   * uniformly here rather than conditioned on the sibling media type's content type, matching
+   * how {@link Parameter} always carries an effective style regardless of relevance.
+   */
+  style?: { value: string; declared: boolean };
+  /** As {@link Parameter.explode}. */
+  explode?: { value: boolean; declared: boolean };
+  allowReserved?: boolean;
 }
 
 export interface RequestBodyInfo {
@@ -340,6 +364,43 @@ export interface ResponseInfo {
   description?: string;
   headers: ResponseHeader[];
   content: MediaTypeBody[];
+  /**
+   * `links`: how a value in this response can drive a subsequent call, e.g. "use this
+   * response's `id` to call `getPetById`". This is the only place OpenAPI documents how
+   * operations compose, so dropping it loses the whole story of a multi-step API.
+   */
+  links?: ResponseLink[];
+}
+
+/**
+ * OpenAPI's Link Object. Deliberately not shared with OpenRPC's {@link RpcLink} even though
+ * both describe a runtime cross-reference from one call's result to another call -- the two
+ * spec objects genuinely differ in shape. OpenAPI points at the linked operation by
+ * `operationId` *or* a JSON Pointer `operationRef`, and can override the linked call's
+ * request body; OpenRPC's Link Object has neither. `parameters` keeps the spec's own field
+ * name (OpenRPC calls the equivalent `params`) but the same per-entry shape as
+ * {@link RpcLink.params}: each value is kept verbatim since it may be a literal or a runtime
+ * expression string such as `$response.body#/id`, which apibox has no way to evaluate.
+ */
+export interface ResponseLink {
+  name: string;
+  description?: string;
+  /** Direct operation reference, when the document used `operationId`. */
+  operationId?: string;
+  /** JSON Pointer to an operation (e.g. `#/paths/~1pets~1{id}/get`), when the document used `operationRef` instead. */
+  operationRef?: string;
+  /**
+   * `operationRef` resolved to the operation it points at, when it could be matched to one
+   * parsed from this same document -- mirrors {@link DiscriminatorMapping.resolvedName}.
+   * `undefined` when `operationRef` was absent, malformed, or pointed outside the document.
+   */
+  resolvedOperationId?: string;
+  /** Param/property name -> literal value or runtime expression, in declaration order. */
+  parameters?: Array<{ name: string; value: unknown }>;
+  /** A request body to use for the linked call, kept verbatim -- it may itself be a runtime expression. */
+  requestBody?: unknown;
+  /** Overrides the server the linked call should be made against. */
+  server?: ServerInfo;
 }
 
 /** A security requirement: any one of the alternatives is sufficient. */
@@ -386,6 +447,30 @@ export interface Operation {
   responses: ResponseInfo[];
   /** Empty array means "explicitly public"; `undefined` means "inherits the document default". */
   security?: SecurityRequirement[];
+  /**
+   * `callbacks`: requests the API makes *back* to the caller, e.g. a webhook fired when an
+   * order ships. Each entry's own {@link Callback.operations} never carries further
+   * `callbacks` of its own, even if the document nested one -- there is no legitimate use for
+   * a callback-of-a-callback in OpenAPI, and parsing one would recurse without a natural
+   * bound. That makes this a fixed two-level structure (operation -> callback -> callback's
+   * own operations) by construction, not by depth-counting at parse time.
+   */
+  callbacks?: Callback[];
+}
+
+/**
+ * One named entry from an operation's `callbacks` map: a runtime expression identifying
+ * where the callback request lands (e.g. `{$request.body#/callbackUrl}`), and the Path
+ * Item's own operations describing what apibox sends there. Structurally a nested Path Item,
+ * so {@link operations} reuses {@link Operation} -- see that field's callbacks note for how
+ * the nesting is bounded.
+ */
+export interface Callback {
+  /** The callback's name -- the key in the `callbacks` map. */
+  name: string;
+  /** The runtime expression key, kept verbatim since apibox cannot evaluate it. */
+  expression: string;
+  operations: Operation[];
 }
 
 export interface OpenApiDocument extends ApiDocumentBase {

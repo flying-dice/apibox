@@ -1343,35 +1343,95 @@ function parseOperations(root, names, documentServers, warnings) {
     const pathItem = asRecord(pathValue);
     if (!pathItem)
       continue;
-    const sharedParameters = parseParameters(pathItem.parameters, names);
-    const pathServers = parseServers2(pathItem.servers);
-    for (const method of METHODS) {
-      const operationValue = asRecord(pathItem[method]);
-      if (!operationValue)
+    operations.push(...parsePathItemOperations(pathItem, names, documentServers, warnings, path, taken, {
+      parseCallbacks: true
+    }));
+  }
+  resolveLinkOperationRefs(operations);
+  return operations;
+}
+function parsePathItemOperations(pathItem, names, documentServers, warnings, path, taken, options) {
+  const sharedParameters = parseParameters(pathItem.parameters, names);
+  const pathServers = parseServers2(pathItem.servers);
+  const operations = [];
+  for (const method of METHODS) {
+    const operationValue = asRecord(pathItem[method]);
+    if (!operationValue)
+      continue;
+    const operationId = asString(operationValue.operationId);
+    const id = uniqueId(slugify(operationId ?? `${method}-${path}`), taken);
+    const ownParameters = parseParameters(operationValue.parameters, names);
+    const ownServers = parseServers2(operationValue.servers);
+    operations.push({
+      id,
+      method: method.toUpperCase(),
+      path,
+      operationId,
+      summary: asString(operationValue.summary),
+      description: asString(operationValue.description),
+      deprecated: operationValue.deprecated === true,
+      tags: asArray(operationValue.tags).filter((t) => typeof t === "string"),
+      servers: ownServers.length > 0 ? ownServers : pathServers.length > 0 ? pathServers : documentServers,
+      externalDocs: parseExternalDocs(operationValue.externalDocs),
+      parameters: mergeParameters(sharedParameters, ownParameters),
+      requestBody: parseRequestBody(operationValue.requestBody, names),
+      responses: parseResponses(operationValue.responses, names),
+      security: parseSecurity(operationValue.security),
+      callbacks: options.parseCallbacks ? parseCallbacks(operationValue.callbacks, names, warnings, taken) : undefined
+    });
+  }
+  return operations;
+}
+function parseCallbacks(raw, names, warnings, taken) {
+  const callbacksRecord = asRecord(raw);
+  if (!callbacksRecord)
+    return;
+  const out = [];
+  for (const [callbackName, callbackValue] of Object.entries(callbacksRecord)) {
+    if (isExtensionKey(callbackName))
+      continue;
+    const expressions = asRecord(callbackValue);
+    if (!expressions)
+      continue;
+    for (const [expression, pathItemValue] of Object.entries(expressions)) {
+      if (isExtensionKey(expression))
         continue;
-      const operationId = asString(operationValue.operationId);
-      const id = uniqueId(slugify(operationId ?? `${method}-${path}`), taken);
-      const ownParameters = parseParameters(operationValue.parameters, names);
-      const ownServers = parseServers2(operationValue.servers);
-      operations.push({
-        id,
-        method: method.toUpperCase(),
-        path,
-        operationId,
-        summary: asString(operationValue.summary),
-        description: asString(operationValue.description),
-        deprecated: operationValue.deprecated === true,
-        tags: asArray(operationValue.tags).filter((t) => typeof t === "string"),
-        servers: ownServers.length > 0 ? ownServers : pathServers.length > 0 ? pathServers : documentServers,
-        externalDocs: parseExternalDocs(operationValue.externalDocs),
-        parameters: mergeParameters(sharedParameters, ownParameters),
-        requestBody: parseRequestBody(operationValue.requestBody, names),
-        responses: parseResponses(operationValue.responses, names),
-        security: parseSecurity(operationValue.security)
+      const pathItem = asRecord(pathItemValue);
+      if (!pathItem)
+        continue;
+      out.push({
+        name: callbackName,
+        expression,
+        operations: parsePathItemOperations(pathItem, names, [], warnings, expression, taken, {
+          parseCallbacks: false
+        })
       });
     }
   }
-  return operations;
+  return out.length > 0 ? out : undefined;
+}
+function jsonPointerEscape(segment) {
+  return segment.replace(/~/g, "~0").replace(/\//g, "~1");
+}
+function resolveLinkOperationRefs(operations) {
+  const byPointer = new Map;
+  for (const operation of operations) {
+    if (!operation.operationId)
+      continue;
+    const pointer = `#/paths/${jsonPointerEscape(operation.path)}/${operation.method.toLowerCase()}`;
+    byPointer.set(pointer, operation.operationId);
+  }
+  for (const operation of operations) {
+    for (const response of operation.responses) {
+      for (const link of response.links ?? []) {
+        if (!link.operationRef)
+          continue;
+        const hashIndex = link.operationRef.indexOf("#");
+        const fragment = hashIndex >= 0 ? link.operationRef.slice(hashIndex) : link.operationRef;
+        link.resolvedOperationId = byPointer.get(fragment);
+      }
+    }
+  }
 }
 function mergeParameters(shared, own) {
   const overridden = new Set(own.map((p) => `${p.in}:${p.name}`));
@@ -1441,9 +1501,33 @@ function parseResponses(raw, names) {
           content
         };
       }) : [],
-      content: parseContent(response.content, names)
+      content: parseContent(response.content, names),
+      links: parseLinks2(response.links)
     };
   }).sort(compareStatus);
+}
+function parseLinks2(raw) {
+  const links = asRecord(raw);
+  if (!links)
+    return;
+  const out = Object.entries(links).filter(([name]) => !isExtensionKey(name)).map(([name, value]) => {
+    const link = asRecord(value) ?? {};
+    const parameters = asRecord(link.parameters);
+    const server = asRecord(link.server);
+    return {
+      name,
+      description: asString(link.description),
+      operationId: asString(link.operationId),
+      operationRef: asString(link.operationRef),
+      parameters: parameters && Object.keys(parameters).length > 0 ? Object.entries(parameters).map(([paramName, paramValue]) => ({
+        name: paramName,
+        value: paramValue
+      })) : undefined,
+      requestBody: "requestBody" in link ? link.requestBody : undefined,
+      server: server ? parseServers2([server])[0] : undefined
+    };
+  });
+  return out.length > 0 ? out : undefined;
 }
 function compareStatus(a, b) {
   const rank = (status) => status === "default" ? Number.MAX_SAFE_INTEGER : Number.parseInt(status.replace(/X/gi, "0"), 10) || 0;
@@ -1467,9 +1551,43 @@ function parseContent(raw, names) {
     return {
       contentType,
       schema: normaliseSchema(media.schema, { names }),
-      examples: parseExamples2(media)
+      examples: parseExamples2(media),
+      encoding: parseEncoding(media.encoding, names)
     };
   });
+}
+function parseEncoding(raw, names) {
+  const encoding = asRecord(raw);
+  if (!encoding)
+    return;
+  const out = Object.entries(encoding).map(([propertyName, value]) => {
+    const entry = asRecord(value) ?? {};
+    const headers = asRecord(entry.headers);
+    const declaredStyle = asString(entry.style);
+    const style = declaredStyle ?? "form";
+    const declaredExplode = typeof entry.explode === "boolean" ? entry.explode : undefined;
+    const explode = declaredExplode ?? defaultExplode(style);
+    return {
+      propertyName,
+      contentType: asString(entry.contentType),
+      headers: headers ? Object.entries(headers).map(([name, headerValue]) => {
+        const header = asRecord(headerValue) ?? {};
+        const { schema, content } = parseSchemaOrContent(header, names);
+        return {
+          name,
+          description: asString(header.description),
+          required: header.required === true,
+          deprecated: header.deprecated === true,
+          schema,
+          content
+        };
+      }) : undefined,
+      style: { value: style, declared: declaredStyle !== undefined },
+      explode: { value: explode, declared: declaredExplode !== undefined },
+      allowReserved: entry.allowReserved === true ? true : undefined
+    };
+  });
+  return out.length > 0 ? out : undefined;
 }
 function parseExamples2(holder) {
   const out = [];

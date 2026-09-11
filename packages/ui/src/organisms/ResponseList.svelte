@@ -1,8 +1,10 @@
 <script lang="ts">
   import type { ResponseInfo } from '@apibox/core';
+  import Chip from '../atoms/Chip.svelte';
   import StatusCode from '../atoms/StatusCode.svelte';
   import SchemaTypeLabel from '../molecules/SchemaTypeLabel.svelte';
   import MediaTypeViewer from './MediaTypeViewer.svelte';
+  import ServerList from './ServerList.svelte';
 
   interface Props {
     responses: readonly ResponseInfo[];
@@ -40,6 +42,46 @@
 
           {#if response.content.length > 0}
             <MediaTypeViewer content={response.content} testId="{testId}-{index}-media" />
+          {/if}
+
+          {#if response.links?.length}
+            <section class="links" aria-label="Links" data-testid="{testId}-{index}-links">
+              <h4>Links</h4>
+              {#each response.links as link, linkIndex (`${link.name}-${linkIndex}`)}
+                <div class="link" data-testid="{testId}-{index}-link-{linkIndex}">
+                  <p class="link-name" data-testid="{testId}-{index}-link-{linkIndex}-name">
+                    {link.name}
+                    {#if link.operationId ?? link.resolvedOperationId}
+                      → {link.operationId ?? link.resolvedOperationId}
+                    {:else if link.operationRef}
+                      → <code>{link.operationRef}</code>
+                    {/if}
+                  </p>
+                  {#if link.description}
+                    <p data-testid="{testId}-{index}-link-{linkIndex}-description">
+                      {link.description}
+                    </p>
+                  {/if}
+                  {#if link.parameters?.length}
+                    <div class="chips" data-testid="{testId}-{index}-link-{linkIndex}-parameters">
+                      {#each link.parameters as parameter (parameter.name)}
+                        <Chip
+                          label={parameter.name}
+                          value={typeof parameter.value === 'string'
+                            ? parameter.value
+                            : JSON.stringify(parameter.value)}
+                          code
+                          testId="{testId}-{index}-link-{linkIndex}-parameter-{parameter.name}"
+                        />
+                      {/each}
+                    </div>
+                  {/if}
+                  {#if link.server}
+                    <ServerList servers={[link.server]} testId="{testId}-{index}-link-{linkIndex}-server" />
+                  {/if}
+                </div>
+              {/each}
+            </section>
           {/if}
         </article>
       {/each}
@@ -96,6 +138,32 @@
   .header code {
     font-family: var(--apibox-font-code);
     font-size: var(--apibox-font-size-code);
+  }
+
+  .links {
+    display: flex;
+    flex-direction: column;
+    gap: var(--apibox-space-3);
+    padding: var(--apibox-space-3);
+    background: var(--apibox-bg-sunken);
+    border-radius: var(--apibox-radius);
+  }
+
+  .link {
+    display: flex;
+    flex-direction: column;
+    gap: var(--apibox-space-2);
+  }
+
+  .link-name code {
+    font-family: var(--apibox-font-code);
+    font-size: var(--apibox-font-size-code);
+  }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--apibox-space-2);
   }
 
   @media (width <= 40rem) {

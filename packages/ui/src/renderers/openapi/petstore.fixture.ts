@@ -175,11 +175,52 @@ export const PETSTORE_DOCUMENT: OpenApiDocument = {
             examples: [{ name: 'Minimal', value: { name: 'Rex' } }],
           },
           { contentType: 'application/xml', schema: NEW_PET },
+          {
+            contentType: 'multipart/form-data',
+            schema: normaliseSchema({
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                photo: { type: 'string', format: 'binary' },
+              },
+            }),
+            encoding: [{ propertyName: 'photo', contentType: 'image/png' }],
+          },
         ],
       },
       responses: [
-        { status: '201', description: 'The created pet.', headers: [], content: [petJsonMedia] },
+        {
+          status: '201',
+          description: 'The created pet.',
+          headers: [],
+          content: [petJsonMedia],
+          links: [
+            {
+              name: 'GetCreatedPet',
+              operationId: 'getPet',
+              description: "Fetch the pet that was just created, using this response's id.",
+              parameters: [{ name: 'petId', value: '$response.body#/id' }],
+            },
+          ],
+        },
         { status: '409', description: 'A pet with that name exists.', headers: [], content: [] },
+      ],
+      callbacks: [
+        {
+          name: 'onStatusChange',
+          expression: '{$request.body#/webhookUrl}',
+          operations: [
+            createOperation({
+              id: 'onStatusChangeNotify',
+              method: 'POST',
+              path: '{$request.body#/webhookUrl}',
+              summary: 'Pet status changed',
+              responses: [
+                { status: '200', description: 'Acknowledged.', headers: [], content: [] },
+              ],
+            }),
+          ],
+        },
       ],
     }),
     createOperation({

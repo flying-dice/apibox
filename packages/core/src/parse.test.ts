@@ -597,6 +597,301 @@ describe('OpenAPI', () => {
       expect(explicitlyFalse?.allowEmptyValue).toBeUndefined();
     });
   });
+
+  describe('response links', () => {
+    it('keeps a runtime-expression parameter verbatim, distinct from a literal one', async () => {
+      const doc = (await parseApiDocument({
+        openapi: '3.1.0',
+        info: { title: 'L', version: '1.0.0' },
+        paths: {
+          '/pets': {
+            post: {
+              operationId: 'createPet',
+              responses: {
+                '201': {
+                  description: 'created',
+                  links: {
+                    GetPetById: {
+                      operationId: 'getPet',
+                      parameters: {
+                        petId: '$response.body#/id',
+                        source: 'createPet',
+                      },
+                      description: 'The pet just created.',
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      })) as OpenApiDocument;
+
+      const link = doc.operations[0]?.responses[0]?.links?.[0];
+      expect(link?.name).toBe('GetPetById');
+      expect(link?.operationId).toBe('getPet');
+      expect(link?.description).toBe('The pet just created.');
+      // A runtime expression string and a literal string are indistinguishable in JSON, and
+      // apibox cannot evaluate either -- both must survive exactly as written.
+      expect(link?.parameters).toEqual([
+        { name: 'petId', value: '$response.body#/id' },
+        { name: 'source', value: 'createPet' },
+      ]);
+    });
+
+    it('resolves operationRef to the operation it points at', async () => {
+      const doc = (await parseApiDocument({
+        openapi: '3.1.0',
+        info: { title: 'L', version: '1.0.0' },
+        paths: {
+          '/pets/{id}': {
+            get: {
+              operationId: 'getPet',
+              responses: { '200': { description: 'ok' } },
+            },
+          },
+          '/pets': {
+            post: {
+              operationId: 'createPet',
+              responses: {
+                '201': {
+                  description: 'created',
+                  links: {
+                    GetPetById: { operationRef: '#/paths/~1pets~1{id}/get' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      })) as OpenApiDocument;
+
+      const link = doc.operations.find((o) => o.id === 'createpet')?.responses[0]?.links?.[0];
+      expect(link?.operationRef).toBe('#/paths/~1pets~1{id}/get');
+      expect(link?.resolvedOperationId).toBe('getPet');
+    });
+
+    it('leaves resolvedOperationId undefined when operationRef matches nothing in the document', async () => {
+      const doc = (await parseApiDocument({
+        openapi: '3.1.0',
+        info: { title: 'L', version: '1.0.0' },
+        paths: {
+          '/pets': {
+            post: {
+              operationId: 'createPet',
+              responses: {
+                '201': {
+                  description: 'created',
+                  links: { Nowhere: { operationRef: '#/paths/~1missing/get' } },
+                },
+              },
+            },
+          },
+        },
+      })) as OpenApiDocument;
+
+      const link = doc.operations[0]?.responses[0]?.links?.[0];
+      expect(link?.resolvedOperationId).toBeUndefined();
+    });
+  });
+
+  describe('operation callbacks', () => {
+    it('parses a nested callback operation, reachable by its runtime expression and method', async () => {
+      const doc = (await parseApiDocument({
+        openapi: '3.1.0',
+        info: { title: 'C', version: '1.0.0' },
+        paths: {
+          '/subscriptions': {
+            post: {
+              operationId: 'subscribe',
+              responses: { '201': { description: 'created' } },
+              callbacks: {
+                onEvent: {
+                  '{$request.body#/callbackUrl}': {
+                    post: {
+                      operationId: 'notify',
+                      requestBody: {
+                        content: { 'application/json': { schema: { type: 'object' } } },
+                      },
+                      responses: { '200': { description: 'acknowledged' } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      })) as OpenApiDocument;
+
+      const callback = doc.operations[0]?.callbacks?.[0];
+      expect(callback?.name).toBe('onEvent');
+      expect(callback?.expression).toBe('{$request.body#/callbackUrl}');
+      const nested = callback?.operations[0];
+      expect(nested?.method).toBe('POST');
+      expect(nested?.operationId).toBe('notify');
+      expect(nested?.responses[0]?.status).toBe('200');
+    });
+
+    it('does not recurse into a callback operation declaring its own callbacks', async () => {
+      // OpenAPI's Operation Object schema permits `callbacks` on any operation, including one
+      // reached through another callback. Parsing that would recurse without a natural bound,
+      // so a callback's own operations never carry further callbacks.
+      const doc = (await parseApiDocument({
+        openapi: '3.1.0',
+        info: { title: 'C', version: '1.0.0' },
+        paths: {
+          '/subscriptions': {
+            post: {
+              operationId: 'subscribe',
+              responses: { '201': { description: 'created' } },
+              callbacks: {
+                onEvent: {
+                  '{$request.body#/callbackUrl}': {
+                    post: {
+                      operationId: 'notify',
+                      responses: { '200': { description: 'ok' } },
+                      callbacks: {
+                        onAck: {
+                          '{$request.body#/ackUrl}': {
+                            post: {
+                              operationId: 'ack',
+                              responses: { '200': { description: 'ok' } },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      })) as OpenApiDocument;
+
+      const nested = doc.operations[0]?.callbacks?.[0]?.operations[0];
+      expect(nested?.operationId).toBe('notify');
+      expect(nested?.callbacks).toBeUndefined();
+    });
+
+    it('parses a self-referential callback without hanging', async () => {
+      // A cyclic $ref inside a callback's own request body (rather than in `callbacks`
+      // itself, which this parser never walks recursively) is the more realistic shape a
+      // self-referential callback would take. Dereferencing already handles cyclic schemas
+      // elsewhere; this guards that callbacks parsing does not add a second, unbounded path.
+      const doc = (await parseApiDocument({
+        openapi: '3.1.0',
+        info: { title: 'C', version: '1.0.0' },
+        paths: {
+          '/subscriptions': {
+            post: {
+              operationId: 'subscribe',
+              responses: { '201': { description: 'created' } },
+              callbacks: {
+                onEvent: {
+                  '{$request.body#/callbackUrl}': {
+                    post: {
+                      operationId: 'notify',
+                      requestBody: {
+                        content: {
+                          'application/json': {
+                            schema: { $ref: '#/components/schemas/Node' },
+                          },
+                        },
+                      },
+                      responses: { '200': { description: 'ok' } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        components: {
+          schemas: {
+            Node: {
+              type: 'object',
+              properties: { child: { $ref: '#/components/schemas/Node' } },
+            },
+          },
+        },
+      })) as OpenApiDocument;
+
+      const nested = doc.operations[0]?.callbacks?.[0]?.operations[0];
+      const schema = nested?.requestBody?.content[0]?.schema;
+      expect(schema?.refName).toBe('Node');
+      expect(schema?.properties?.[0]?.circularRef).toBe('Node');
+    });
+  });
+
+  describe('multipart encoding', () => {
+    it('maps an encoding entry to the property it governs', async () => {
+      const doc = (await parseApiDocument({
+        openapi: '3.1.0',
+        info: { title: 'E', version: '1.0.0' },
+        paths: {
+          '/upload': {
+            post: {
+              operationId: 'upload',
+              requestBody: {
+                content: {
+                  'multipart/form-data': {
+                    schema: {
+                      type: 'object',
+                      properties: {
+                        avatar: { type: 'string', format: 'binary' },
+                        metadata: { type: 'object' },
+                      },
+                    },
+                    encoding: {
+                      avatar: { contentType: 'image/png' },
+                      metadata: { contentType: 'application/json', allowReserved: true },
+                    },
+                  },
+                },
+              },
+              responses: { '200': { description: 'ok' } },
+            },
+          },
+        },
+      })) as OpenApiDocument;
+
+      const encoding = doc.operations[0]?.requestBody?.content[0]?.encoding;
+      expect(encoding).toHaveLength(2);
+      const avatar = encoding?.find((e) => e.propertyName === 'avatar');
+      expect(avatar?.contentType).toBe('image/png');
+      const metadata = encoding?.find((e) => e.propertyName === 'metadata');
+      expect(metadata?.contentType).toBe('application/json');
+      expect(metadata?.allowReserved).toBe(true);
+    });
+
+    it('defaults style to form and explode to true, marking both undeclared', async () => {
+      const doc = (await parseApiDocument({
+        openapi: '3.1.0',
+        info: { title: 'E', version: '1.0.0' },
+        paths: {
+          '/upload': {
+            post: {
+              operationId: 'upload',
+              requestBody: {
+                content: {
+                  'multipart/form-data': {
+                    schema: { type: 'object', properties: { tags: { type: 'array' } } },
+                    encoding: { tags: {} },
+                  },
+                },
+              },
+              responses: { '200': { description: 'ok' } },
+            },
+          },
+        },
+      })) as OpenApiDocument;
+
+      const entry = doc.operations[0]?.requestBody?.content[0]?.encoding?.[0];
+      expect(entry?.style).toEqual({ value: 'form', declared: false });
+      expect(entry?.explode).toEqual({ value: true, declared: false });
+    });
+  });
 });
 
 describe('AsyncAPI', () => {

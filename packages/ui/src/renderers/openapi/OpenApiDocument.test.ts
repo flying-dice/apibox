@@ -109,6 +109,41 @@ describe('OpenApiDocument', () => {
     await userEvent.click(screen.getByTestId(`${prefix}-tabs-tab-1`));
     expect(screen.getByTestId(`${prefix}-code-content`)).toHaveTextContent('Whiskers');
   });
+
+  it("renders a response link's target operation and runtime-expression parameter", async () => {
+    render(OpenApiDocument, { document: PETSTORE_DOCUMENT });
+    const prefix = 'openapi-document-operation-createPet-responses-0-link-0';
+
+    expect(screen.getByTestId(`${prefix}-name`)).toHaveTextContent('GetCreatedPet');
+    expect(screen.getByTestId(`${prefix}-name`)).toHaveTextContent('getPet');
+    expect(screen.getByTestId(`${prefix}-parameter-petId`)).toHaveTextContent('$response.body#/id');
+  });
+
+  it("renders an operation's callback as a nested operation, reachable by name", async () => {
+    render(OpenApiDocument, { document: PETSTORE_DOCUMENT });
+
+    expect(
+      screen.getByTestId('openapi-document-operation-createPet-callback-0-heading'),
+    ).toHaveTextContent('onStatusChange');
+    expect(
+      screen.getByTestId('openapi-document-operation-createPet-callback-0-heading'),
+    ).toHaveTextContent('{$request.body#/webhookUrl}');
+    expect(
+      screen.getByTestId(
+        'openapi-document-operation-createPet-callback-0-onStatusChangeNotify-summary',
+      ),
+    ).toHaveTextContent('Pet status changed');
+  });
+
+  it("renders a multipart request body's per-property encoding", async () => {
+    render(OpenApiDocument, { document: PETSTORE_DOCUMENT });
+    const prefix = 'openapi-document-operation-createPet-request-media';
+
+    await userEvent.click(screen.getByTestId(`${prefix}-tabs-tab-2`));
+    expect(screen.getByTestId(`${prefix}-encoding-photo-content-type`)).toHaveTextContent(
+      'image/png',
+    );
+  });
 });
 
 describe('MediaTypeViewer', () => {

@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { MediaTypeBody } from '@apibox/core';
+  import Chip from '../atoms/Chip.svelte';
   import TabBar from '../molecules/TabBar.svelte';
   import ExampleViewer from './ExampleViewer.svelte';
   import { createIndexedSelection } from './indexed-selection.svelte.js';
@@ -44,6 +45,47 @@
       data-testid="{testId}-panel"
     >
       <SchemaViewer schema={selected.schema} testId="{testId}-schema" />
+      {#if selected.encoding?.length}
+        <section class="encoding" aria-label="Part encoding" data-testid="{testId}-encoding">
+          <h4>Encoding</h4>
+          {#each selected.encoding as entry (entry.propertyName)}
+            <div class="encoding-entry" data-testid="{testId}-encoding-{entry.propertyName}">
+              <code class="property">{entry.propertyName}</code>
+              <div class="chips">
+                {#if entry.contentType}
+                  <Chip
+                    label="content type"
+                    value={entry.contentType}
+                    code
+                    testId="{testId}-encoding-{entry.propertyName}-content-type"
+                  />
+                {/if}
+                {#if entry.style?.declared}
+                  <Chip
+                    label="style"
+                    value={entry.style.value}
+                    testId="{testId}-encoding-{entry.propertyName}-style"
+                  />
+                {/if}
+                {#if entry.explode?.declared}
+                  <Chip
+                    label="explode"
+                    value={String(entry.explode.value)}
+                    testId="{testId}-encoding-{entry.propertyName}-explode"
+                  />
+                {/if}
+                {#if entry.allowReserved}
+                  <Chip
+                    label="allowReserved"
+                    value="true"
+                    testId="{testId}-encoding-{entry.propertyName}-allow-reserved"
+                  />
+                {/if}
+              </div>
+            </div>
+          {/each}
+        </section>
+      {/if}
       {#if selected.examples?.length}
         <ExampleViewer examples={selected.examples} testId="{testId}-examples" />
       {/if}
@@ -72,5 +114,36 @@
   .empty {
     margin: 0;
     color: var(--apibox-fg-muted);
+  }
+
+  .encoding {
+    display: flex;
+    flex-direction: column;
+    gap: var(--apibox-space-2);
+    padding: var(--apibox-space-3);
+    background: var(--apibox-bg-sunken);
+    border-radius: var(--apibox-radius);
+  }
+
+  .encoding h4 {
+    margin: 0;
+  }
+
+  .encoding-entry {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--apibox-space-3);
+    align-items: center;
+  }
+
+  .property {
+    font-family: var(--apibox-font-code);
+    font-size: var(--apibox-font-size-code);
+  }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--apibox-space-2);
   }
 </style>
