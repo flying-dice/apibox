@@ -32,6 +32,12 @@ servers:
         enum: ['1883', '8883']
     security:
       - $ref: '#/components/securitySchemes/apiToken'
+    bindings:
+      mqtt:
+        clientId: streetlights-server
+        cleanSession: true
+        keepAlive: 60
+        bindingVersion: 0.2.0
 channels:
   lightMeasured:
     address: 'smartylighting/streetlights/1/0/event/{streetlightId}/lighting/measured'
@@ -43,6 +49,11 @@ channels:
     messages:
       lightMeasured:
         $ref: '#/components/messages/LightMeasured'
+    bindings:
+      mqtt:
+        qos: 1
+        retain: false
+        bindingVersion: 0.2.0
   turnOn:
     address: 'smartylighting/streetlights/1/0/action/{streetlightId}/turn/on'
     title: Turn on
@@ -86,6 +97,10 @@ operations:
     summary: Receive a lighting measurement.
     tags:
       - name: telemetry
+    bindings:
+      mqtt:
+        qos: 1
+        bindingVersion: 0.2.0
   sendTurnOn:
     action: send
     channel: { $ref: '#/channels/turnOn' }
@@ -123,6 +138,10 @@ components:
       correlationId:
         location: '$message.header#/correlationId'
         description: Correlates a reading with the request that triggered it, when polled.
+      bindings:
+        mqtt:
+          payloadFormatIndicator: 1
+          bindingVersion: 0.2.0
       payload:
         type: object
         required: [lumens, sentAt]

@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { MessageInfo } from '@apibox/core';
+  import BindingList from '../../organisms/BindingList.svelte';
   import ExampleViewer from '../../organisms/ExampleViewer.svelte';
   import SchemaViewer from '../../organisms/SchemaViewer.svelte';
 
@@ -42,6 +43,7 @@
   {#if message.examples?.length}
     <ExampleViewer examples={message.examples} testId="{testId}-examples" />
   {/if}
+  <BindingList bindings={message.bindings} testId="{testId}-bindings" />
 </section>
 
 <style>

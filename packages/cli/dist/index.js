@@ -657,7 +657,8 @@ async function parseAsyncApi(raw, options = {}) {
       description: safe(() => variable.description()),
       enum: variable.hasAllowedValues() ? variable.allowedValues() : undefined
     }))),
-    security: toSecurityRequirements(safe(() => server.security()), securitySchemeNames)
+    security: toSecurityRequirements(safe(() => server.security()), securitySchemeNames),
+    bindings: toBindings(safe(() => server.bindings()))
   }));
   const tags = document.info().tags().all().map((tag) => ({
     name: tag.name(),
@@ -681,6 +682,8 @@ async function parseAsyncApi(raw, options = {}) {
       security: toSecurityRequirements(safe(() => operation.security()), securitySchemeNames),
       tags: nonEmpty(safe(() => operation.tags().all().map((tag) => tag.name()))),
       channelServers: channel ? nonEmpty(safe(() => channel.servers().all().map((server) => server.id()))) : undefined,
+      bindings: toBindings(safe(() => operation.bindings())),
+      channelBindings: channel ? toBindings(safe(() => channel.bindings())) : undefined,
       reply: reply ? {
         channelAddress: safe(() => reply.channel()?.address() ?? reply.channel()?.id()),
         addressLocation: safe(() => reply.address()?.location()),
@@ -696,7 +699,8 @@ async function parseAsyncApi(raw, options = {}) {
     title: safe(() => readTitle(channel)),
     description: safe(() => channel.description()),
     parameters: parseChannelParameters(channel),
-    servers: nonEmpty(safe(() => channel.servers().all().map((server) => server.id())))
+    servers: nonEmpty(safe(() => channel.servers().all().map((server) => server.id()))),
+    bindings: toBindings(safe(() => channel.bindings()))
   }));
   const schemas = document.components().schemas().all().map((schema) => normaliseAsyncApiSchema(schema.json(), {}, schema.id())).filter((node) => Boolean(node));
   const license = safe(() => info.license());
@@ -822,7 +826,8 @@ function toMessageInfo(message, defaultContentType, defaultSchemaFormat, warning
     correlationId: correlationId ? {
       location: safe(() => correlationId.location()),
       description: safe(() => correlationId.description())
-    } : undefined
+    } : undefined,
+    bindings: toBindings(safe(() => message.bindings()))
   };
 }
 function normalisePayloadLike(schema, defaultSchemaFormat) {
@@ -846,6 +851,19 @@ function toExternalDocs(docs) {
   if (!docs)
     return;
   return { url: docs.url(), description: safe(() => docs.description()) };
+}
+function toBindings(bindings) {
+  const list = safe(() => bindings?.all());
+  if (!list || list.length === 0)
+    return;
+  return list.map((binding) => {
+    const value = asRecord(safe(() => binding.value()));
+    return {
+      protocol: binding.protocol(),
+      version: safe(() => binding.version()) || undefined,
+      fields: value ? Object.entries(value).map(([key, fieldValue]) => ({ key, value: fieldValue })) : []
+    };
+  });
 }
 function toSecurityRequirements(list, schemeNames) {
   if (!list || list.length === 0)

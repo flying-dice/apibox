@@ -2,6 +2,7 @@
   import type { AsyncApiDocument as AsyncApiDocumentModel } from '@apibox/core';
   import Badge from '../../atoms/Badge.svelte';
   import Link from '../../atoms/Link.svelte';
+  import BindingList from '../../organisms/BindingList.svelte';
   import DocumentHeader from '../../organisms/DocumentHeader.svelte';
   import ParameterTable from '../../organisms/ParameterTable.svelte';
   import SchemaCatalog from '../../organisms/SchemaCatalog.svelte';
@@ -70,6 +71,7 @@
             <p data-testid="{testId}-channel-{index}-description">{channel.description}</p>
           {/if}
           <ParameterTable parameters={channel.parameters} testId="{testId}-channel-{index}-parameters" />
+          <BindingList bindings={channel.bindings} testId="{testId}-channel-{index}-bindings" />
         </article>
       {/each}
     </section>

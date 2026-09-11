@@ -221,6 +221,8 @@ export interface ServerInfo {
    * single-scheme alternative.
    */
   security?: SecurityRequirement[];
+  /** AsyncAPI only: protocol bindings declared directly on this server. */
+  bindings?: BindingInfo[];
 }
 
 export interface ExampleValue {
@@ -228,6 +230,32 @@ export interface ExampleValue {
   summary?: string;
   description?: string;
   value: unknown;
+}
+
+/** One field of a protocol {@link BindingInfo}, in declaration order. */
+export interface BindingField {
+  key: string;
+  value: unknown;
+}
+
+/**
+ * AsyncAPI protocol binding: protocol-specific detail attached to a server, channel,
+ * operation or message -- Kafka topic config, MQTT QoS, an AMQP exchange, and so on.
+ *
+ * Modelled generically, keyed by protocol name and carrying whatever fields the document
+ * wrote, rather than as a typed interface per protocol. AsyncAPI defines dozens of
+ * protocols with no shared shape and adds more over time; a hand-modelled union would cover
+ * a fixed handful properly and silently drop every protocol not enumerated, including ones
+ * that do not exist yet. `@asyncapi/parser` itself already exposes bindings this way -- a
+ * `Collection` keyed by protocol, each entry an untyped `value()` -- so this mirrors what
+ * the library actually gives us rather than inventing per-protocol structure it doesn't
+ * have.
+ */
+export interface BindingInfo {
+  protocol: string;
+  /** `bindingVersion`. The library defaults this to `"latest"` when the document omits it, per spec. */
+  version?: string;
+  fields: BindingField[];
 }
 
 export interface TagInfo {
@@ -554,6 +582,8 @@ export interface MessageInfo {
   payloadSchemaFormat?: string;
   /** As {@link payloadSchemaFormat}, but for `headers` -- AsyncAPI allows either to declare its own format. */
   headersSchemaFormat?: string;
+  /** Protocol bindings declared on this message. */
+  bindings?: BindingInfo[];
 }
 
 /**
@@ -586,6 +616,10 @@ export interface ChannelOperation {
   /** Server names this channel is restricted to, when the document narrows it. */
   channelServers?: string[];
   reply?: OperationReplyInfo;
+  /** Protocol bindings declared on the operation itself. */
+  bindings?: BindingInfo[];
+  /** Protocol bindings declared on the operation's channel. */
+  channelBindings?: BindingInfo[];
 }
 
 /**
@@ -601,6 +635,8 @@ export interface ChannelInfo {
   description?: string;
   parameters: Parameter[];
   servers?: string[];
+  /** Protocol bindings declared on this channel. */
+  bindings?: BindingInfo[];
 }
 
 export interface AsyncApiDocument extends ApiDocumentBase {

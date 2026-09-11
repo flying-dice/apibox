@@ -3,6 +3,7 @@ import { UnsupportedDocumentError } from '../../detect.js';
 import { normaliseSchema } from '../../schema.js';
 import type {
   AsyncApiDocument,
+  BindingInfo,
   ChannelInfo,
   ChannelOperation,
   ExampleValue,
@@ -122,6 +123,7 @@ export async function parseAsyncApi(
         safe(() => server.security()),
         securitySchemeNames,
       ),
+      bindings: toBindings(safe(() => server.bindings())),
     }));
 
   const tags: TagInfo[] = document
@@ -180,6 +182,8 @@ export async function parseAsyncApi(
               ),
             )
           : undefined,
+        bindings: toBindings(safe(() => operation.bindings())),
+        channelBindings: channel ? toBindings(safe(() => channel.bindings())) : undefined,
         reply: reply
           ? ({
               channelAddress: safe(() => reply.channel()?.address() ?? reply.channel()?.id()),
@@ -222,6 +226,7 @@ export async function parseAsyncApi(
                 .map((server) => server.id()),
             ),
           ),
+          bindings: toBindings(safe(() => channel.bindings())),
         }) satisfies ChannelInfo,
     );
 
@@ -438,6 +443,7 @@ function toMessageInfo(
           description: safe(() => correlationId.description()),
         }
       : undefined,
+    bindings: toBindings(safe(() => message.bindings())),
   };
 }
 
@@ -480,6 +486,35 @@ function toExternalDocs(
 ): ExternalDocs | undefined {
   if (!docs) return undefined;
   return { url: docs.url(), description: safe(() => docs.description()) };
+}
+
+/**
+ * Read a protocol bindings collection into {@link BindingInfo}s, one per protocol the
+ * document attached at this location.
+ *
+ * `binding.value()` is deliberately treated as an opaque record rather than walked with any
+ * protocol-specific knowledge -- see {@link BindingInfo}'s own doc comment for why a generic
+ * shape is the point, not a shortcut. `bindingVersion` is not read as a field: the library
+ * already lifts it into `binding.version()` and strips it out of `value()`, so re-reading it
+ * from `value()` here would either duplicate it or find it missing, depending on parser
+ * version.
+ */
+function toBindings(
+  // biome-ignore lint/suspicious/noExplicitAny: the parser's bindings collection is structurally typed
+  bindings: { all(): Array<{ protocol(): string; version(): string; value(): any }> } | undefined,
+): BindingInfo[] | undefined {
+  const list = safe(() => bindings?.all());
+  if (!list || list.length === 0) return undefined;
+  return list.map((binding) => {
+    const value = asRecord(safe(() => binding.value()));
+    return {
+      protocol: binding.protocol(),
+      version: safe(() => binding.version()) || undefined,
+      fields: value
+        ? Object.entries(value).map(([key, fieldValue]) => ({ key, value: fieldValue }))
+        : [],
+    } satisfies BindingInfo;
+  });
 }
 
 /**

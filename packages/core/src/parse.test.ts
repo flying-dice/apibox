@@ -1438,6 +1438,247 @@ describe('AsyncAPI', () => {
     const doc = await load();
     expect(doc.warnings).toEqual([]);
   });
+
+  describe('bindings', () => {
+    it('parses MQTT bindings at server, channel, operation and message level', async () => {
+      const doc = await load();
+      expect(doc.servers[0]?.bindings).toEqual([
+        {
+          protocol: 'mqtt',
+          version: '0.2.0',
+          fields: [
+            { key: 'clientId', value: 'streetlights-server' },
+            { key: 'cleanSession', value: true },
+            { key: 'keepAlive', value: 60 },
+          ],
+        },
+      ]);
+
+      const receive = doc.operations.find((o) => o.action === 'receive');
+      expect(receive?.bindings).toEqual([
+        { protocol: 'mqtt', version: '0.2.0', fields: [{ key: 'qos', value: 1 }] },
+      ]);
+      expect(receive?.channelBindings).toEqual([
+        {
+          protocol: 'mqtt',
+          version: '0.2.0',
+          fields: [
+            { key: 'qos', value: 1 },
+            { key: 'retain', value: false },
+          ],
+        },
+      ]);
+      expect(receive?.messages[0]?.bindings).toEqual([
+        {
+          protocol: 'mqtt',
+          version: '0.2.0',
+          fields: [{ key: 'payloadFormatIndicator', value: 1 }],
+        },
+      ]);
+    });
+
+    it('parses Kafka bindings at all four locations, each field keeping its own meaning', async () => {
+      const doc = (await parseApiDocument({
+        asyncapi: '3.0.0',
+        info: { title: 'Kafka test', version: '1.0.0' },
+        servers: {
+          broker: {
+            host: 'kafka:9092',
+            protocol: 'kafka',
+            bindings: {
+              kafka: {
+                schemaRegistryUrl: 'https://schema-registry.internal',
+                schemaRegistryVendor: 'confluent',
+                bindingVersion: '0.5.0',
+              },
+            },
+          },
+        },
+        channels: {
+          readings: {
+            address: 'readings',
+            bindings: {
+              kafka: { topic: 'readings.v1', partitions: 6, replicas: 3, bindingVersion: '0.5.0' },
+            },
+            messages: { reading: { $ref: '#/components/messages/Reading' } },
+          },
+        },
+        operations: {
+          receiveReadings: {
+            action: 'receive',
+            channel: { $ref: '#/channels/readings' },
+            bindings: {
+              kafka: {
+                groupId: { type: 'string' },
+                clientId: { type: 'string' },
+                bindingVersion: '0.5.0',
+              },
+            },
+          },
+        },
+        components: {
+          messages: {
+            Reading: {
+              payload: { type: 'object' },
+              bindings: { kafka: { key: { type: 'string' }, bindingVersion: '0.5.0' } },
+            },
+          },
+        },
+      })) as AsyncApiDocument;
+
+      expect(doc.servers[0]?.bindings).toEqual([
+        {
+          protocol: 'kafka',
+          version: '0.5.0',
+          fields: [
+            { key: 'schemaRegistryUrl', value: 'https://schema-registry.internal' },
+            { key: 'schemaRegistryVendor', value: 'confluent' },
+          ],
+        },
+      ]);
+
+      const operation = doc.operations[0];
+      expect(operation?.channelBindings).toEqual([
+        {
+          protocol: 'kafka',
+          version: '0.5.0',
+          fields: [
+            { key: 'topic', value: 'readings.v1' },
+            { key: 'partitions', value: 6 },
+            { key: 'replicas', value: 3 },
+          ],
+        },
+      ]);
+      // Nested object values (a Kafka binding's `groupId`/`clientId` are themselves schema
+      // objects, not scalars) survive verbatim rather than being flattened or dropped.
+      expect(operation?.bindings).toEqual([
+        {
+          protocol: 'kafka',
+          version: '0.5.0',
+          fields: [
+            { key: 'groupId', value: { type: 'string' } },
+            { key: 'clientId', value: { type: 'string' } },
+          ],
+        },
+      ]);
+      expect(operation?.messages[0]?.bindings).toEqual([
+        {
+          protocol: 'kafka',
+          version: '0.5.0',
+          fields: [{ key: 'key', value: { type: 'string' } }],
+        },
+      ]);
+    });
+
+    it('surfaces bindings for a protocol with no protocol-specific code in the parser (NATS)', async () => {
+      // Pins the point of the generic model: apibox does not special-case NATS anywhere in
+      // `formats/asyncapi/index.ts` -- `toBindings` reads whatever protocol/fields the
+      // document and library hand it. A protocol reaching the model with no bespoke code
+      // path is what proves the model is actually generic, not merely under-tested.
+      const doc = (await parseApiDocument({
+        asyncapi: '3.0.0',
+        info: { title: 'NATS test', version: '1.0.0' },
+        servers: {
+          n: {
+            host: 'nats://n:4222',
+            protocol: 'nats',
+            bindings: { nats: { bindingVersion: '0.1.0' } },
+          },
+        },
+        channels: {
+          events: {
+            address: 'events.created',
+            bindings: { nats: { queue: 'workers', bindingVersion: '0.1.0' } },
+            messages: { m: { $ref: '#/components/messages/M' } },
+          },
+        },
+        operations: {
+          send: {
+            action: 'send',
+            channel: { $ref: '#/channels/events' },
+            bindings: { nats: { bindingVersion: '0.1.0' } },
+          },
+        },
+        components: {
+          messages: {
+            M: { payload: { type: 'object' }, bindings: { nats: { bindingVersion: '0.1.0' } } },
+          },
+        },
+      })) as AsyncApiDocument;
+
+      expect(doc.operations[0]?.channelBindings).toEqual([
+        { protocol: 'nats', version: '0.1.0', fields: [{ key: 'queue', value: 'workers' }] },
+      ]);
+    });
+
+    it('defaults bindingVersion to "latest" when the document does not declare one', async () => {
+      const doc = (await parseApiDocument({
+        asyncapi: '3.0.0',
+        info: { title: 'Default binding version', version: '1.0.0' },
+        servers: {
+          h: { host: 'h', protocol: 'http', bindings: { http: {} } },
+        },
+        channels: { c: { address: 'c' } },
+        operations: { op: { action: 'send', channel: { $ref: '#/channels/c' } } },
+      })) as AsyncApiDocument;
+
+      expect(doc.servers[0]?.bindings).toEqual([
+        { protocol: 'http', version: 'latest', fields: [] },
+      ]);
+    });
+
+    it('keeps the broken-$ref and security-scheme-identity fixes intact alongside bindings', async () => {
+      // Bindings are read via the same `operation`/`channel`/`message` models the broken-$ref
+      // resilience and security-scheme-name recovery depend on -- this pins that adding
+      // `toBindings()` calls to those same accessors did not disturb either.
+      const doc = (await parseApiDocument({
+        asyncapi: '3.0.0',
+        info: { title: 'Broken ref plus bindings', version: '1.0.0' },
+        servers: {
+          broker: {
+            host: 'kafka:9092',
+            protocol: 'kafka',
+            bindings: { kafka: { bindingVersion: '0.5.0' } },
+            security: [{ $ref: '#/components/securitySchemes/apiToken' }],
+          },
+        },
+        channels: {
+          readings: {
+            address: 'readings',
+            messages: { reading: { $ref: '#/components/messages/Reading' } },
+          },
+        },
+        operations: {
+          receiveReadings: { action: 'receive', channel: { $ref: '#/channels/readings' } },
+        },
+        components: {
+          securitySchemes: { apiToken: { type: 'httpApiKey', name: 'X-Api-Token', in: 'header' } },
+          messages: {
+            Reading: {
+              payload: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  external: { $ref: '#/components/schemas/DoesNotExist' },
+                },
+              },
+            },
+          },
+        },
+      })) as AsyncApiDocument;
+
+      expect(doc.servers[0]?.bindings).toEqual([
+        { protocol: 'kafka', version: '0.5.0', fields: [] },
+      ]);
+      expect(doc.servers[0]?.security).toEqual([
+        { alternatives: [{ scheme: 'apiToken', scopes: [] }] },
+      ]);
+      const external = doc.operations[0]?.messages[0]?.payload?.properties?.find(
+        (p) => p.name === 'external',
+      );
+      expect(external?.unresolvedRef).toBe('#/components/schemas/DoesNotExist');
+    });
+  });
 });
 
 describe('AsyncAPI 2.x', () => {
@@ -1474,6 +1715,30 @@ describe('AsyncAPI 2.x', () => {
     expect(doc.operations.map((o) => o.action)).toEqual(['receive']);
     expect(doc.operations[0]?.messages[0]?.payload?.properties?.map((p) => p.name)).toEqual([
       'lumens',
+    ]);
+  });
+
+  it('reads AMQP bindings on a 2.x channel, its subscribe operation and its message, through the same generic model as 3.x', async () => {
+    const doc = (await loadApiDocument(
+      fixtures('v2-streetlights.asyncapi.yaml'),
+    )) as AsyncApiDocument;
+    const operation = doc.operations[0];
+
+    expect(operation?.channelBindings).toEqual([
+      { protocol: 'amqp', version: '0.3.0', fields: [{ key: 'is', value: 'routingKey' }] },
+    ]);
+    expect(operation?.bindings).toEqual([
+      { protocol: 'amqp', version: '0.3.0', fields: [{ key: 'ack', value: true }] },
+    ]);
+    expect(operation?.messages[0]?.bindings).toEqual([
+      {
+        protocol: 'amqp',
+        version: '0.3.0',
+        fields: [
+          { key: 'contentEncoding', value: 'gzip' },
+          { key: 'messageType', value: 'measurement' },
+        ],
+      },
     ]);
   });
 });

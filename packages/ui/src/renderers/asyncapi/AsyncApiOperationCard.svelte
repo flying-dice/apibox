@@ -2,6 +2,7 @@
   import type { ChannelOperation } from '@apibox/core';
   import CollapsibleCard from '../../molecules/CollapsibleCard.svelte';
   import Badge from '../../atoms/Badge.svelte';
+  import BindingList from '../../organisms/BindingList.svelte';
   import ParameterTable from '../../organisms/ParameterTable.svelte';
   import AsyncApiMessage from './AsyncApiMessage.svelte';
 
@@ -51,6 +52,8 @@
   {/if}
 
   <ParameterTable parameters={operation.parameters} testId="{testId}-parameters" />
+  <BindingList bindings={operation.channelBindings} testId="{testId}-channel-bindings" />
+  <BindingList bindings={operation.bindings} testId="{testId}-bindings" />
   {#each operation.messages as message, index (`${message.name}-${index}`)}
     <AsyncApiMessage {message} testId="{testId}-message-{index}" />
   {/each}

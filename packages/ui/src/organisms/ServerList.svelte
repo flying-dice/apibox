@@ -2,6 +2,7 @@
   import type { ServerInfo } from '@apibox/core';
   import Code from '../atoms/Code.svelte';
   import KeyValueRow from '../molecules/KeyValueRow.svelte';
+  import BindingList from './BindingList.svelte';
 
   interface Props {
     servers: readonly ServerInfo[];
@@ -40,6 +41,7 @@
               {/each}
             </p>
           {/if}
+          <BindingList bindings={server.bindings} testId="{testId}-{index}-bindings" />
         </article>
       {/each}
     </div>

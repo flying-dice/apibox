@@ -10,12 +10,25 @@ channels:
         schema:
           type: string
           pattern: '^[0-9]+$'
+    bindings:
+      amqp:
+        is: routingKey
+        bindingVersion: 0.3.0
     subscribe:
       operationId: receiveMeasured
       summary: Receive a measurement.
+      bindings:
+        amqp:
+          ack: true
+          bindingVersion: 0.3.0
       message:
         name: lightMeasured
         contentType: application/json
+        bindings:
+          amqp:
+            contentEncoding: gzip
+            messageType: measurement
+            bindingVersion: 0.3.0
         payload:
           type: object
           properties:

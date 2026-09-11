@@ -38,6 +38,7 @@ export { default as SearchInput } from './molecules/SearchInput.svelte';
 export type { Tab } from './molecules/TabBar.svelte';
 export { default as TabBar } from './molecules/TabBar.svelte';
 /* -- Organisms ------------------------------------------------------------- */
+export { default as BindingList } from './organisms/BindingList.svelte';
 export { default as DocumentHeader } from './organisms/DocumentHeader.svelte';
 export { default as ExampleViewer } from './organisms/ExampleViewer.svelte';
 export { default as OperationCard } from './organisms/OperationCard.svelte';
