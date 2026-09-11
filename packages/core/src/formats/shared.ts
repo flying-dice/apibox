@@ -11,11 +11,31 @@ import { asRecord, asString, slugify, uniqueId } from '../utils.js';
  * being maintained twice.
  */
 
+export interface DereferenceOptions {
+  /**
+   * How to handle a genuinely circular `$ref` (as opposed to one that is merely broken).
+   *
+   * `true` (the default) inlines it into a real cyclic object graph, which is what
+   * {@link normaliseSchema} is built to walk — this is what OpenAPI and OpenRPC want.
+   *
+   * `'ignore'` leaves a circular `$ref` exactly as authored instead of inlining it. AsyncAPI
+   * wants this: `@asyncapi/parser` does its own resolution afterwards and already handles
+   * circular refs correctly on its own, but a native cyclic JS object handed to it as
+   * *input* makes its (JSON-based) validation step throw — so a circular ref must survive
+   * this pass as a plain `$ref` for the caller to hand onward unresolved, not inlined.
+   */
+  circular?: boolean | 'ignore';
+  /**
+   * Called once per `$ref` this pass could not resolve, in addition to the warning already
+   * pushed to `warnings`. AsyncAPI uses this to find exactly which paths need substituting
+   * with something `@asyncapi/parser` can parse, without touching any other `$ref` in the
+   * document — including a legitimate circular one left in place by `circular: 'ignore'`.
+   */
+  onUnresolved?: (path: string[], ref: string) => void;
+}
+
 /**
  * Resolve every `$ref` in a document.
- *
- * Circular references are permitted and produce genuinely cyclic object graphs, which is
- * what {@link normaliseSchema} is built to walk.
  *
  * Resolution runs with `continueOnError` so that one unreachable external document costs
  * the reader only that reference. Abandoning the whole pass would leave every *internal*
@@ -29,6 +49,7 @@ export async function dereferenceDocument(
   root: Record<string, unknown>,
   location: string | undefined,
   warnings: string[],
+  options: DereferenceOptions = {},
 ): Promise<Record<string, unknown>> {
   const parser = new $RefParser();
   const processLike = (globalThis as { process?: { cwd?: () => string } }).process;
@@ -36,7 +57,7 @@ export async function dereferenceDocument(
   try {
     const resolved = await parser.dereference(base, structuredClone(root) as never, {
       continueOnError: true,
-      dereference: { circular: true },
+      dereference: { circular: options.circular ?? true },
     });
     // `dereference` is typed as returning a JSONSchema, which permits a boolean. A
     // specification document is always an object, so narrow through `unknown`.
@@ -59,7 +80,8 @@ export async function dereferenceDocument(
       warnings.push(
         `Could not resolve $ref at ${failure.path.join('.') || '(root)'}: ${failure.message}`,
       );
-      restoreRef(partial, root, failure);
+      const ref = restoreRef(partial, root, failure);
+      if (ref) options.onUnresolved?.(failure.path, ref);
     }
     return partial;
   }
@@ -114,7 +136,7 @@ function describeError(value: unknown): string {
 const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
 /** Read one path segment from an object or an array. */
-function at(container: unknown, segment: string): unknown {
+export function at(container: unknown, segment: string): unknown {
   if (Array.isArray(container)) {
     const index = Number(segment);
     return Number.isInteger(index) ? container[index] : undefined;
@@ -123,7 +145,7 @@ function at(container: unknown, segment: string): unknown {
 }
 
 /** Write one path segment into an object or an array. Returns false if it could not. */
-function setAt(container: unknown, segment: string, value: unknown): boolean {
+export function setAt(container: unknown, segment: string, value: unknown): boolean {
   if (Array.isArray(container)) {
     const index = Number(segment);
     if (!Number.isInteger(index) || index < 0 || index >= container.length) return false;
@@ -155,18 +177,18 @@ function restoreRef(
   target: Record<string, unknown>,
   original: Record<string, unknown>,
   failure: ResolutionFailure,
-): void {
+): string | undefined {
   const { path } = failure;
-  if (path.length === 0) return;
+  if (path.length === 0) return undefined;
 
   let parent: unknown = target;
   for (const segment of path.slice(0, -1)) {
     parent = at(parent, segment);
-    if (parent === undefined || parent === null) return;
+    if (parent === undefined || parent === null) return undefined;
   }
 
   const key = path[path.length - 1];
-  if (key === undefined) return;
+  if (key === undefined) return undefined;
 
   let source: unknown = original;
   for (const segment of path) {
@@ -178,6 +200,7 @@ function restoreRef(
   const ref =
     typeof originalRef === 'string' ? originalRef : (targetOf(failure.message) ?? path.join('/'));
   setAt(parent, key, { $ref: ref });
+  return ref;
 }
 
 /** Pull the URL or file path out of a resolver error message, when it names one. */

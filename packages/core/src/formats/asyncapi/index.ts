@@ -17,12 +17,22 @@ import type {
   ServerInfo,
   TagInfo,
 } from '../../types.js';
-import { slugify, uniqueId } from '../../utils.js';
-import { parseContact, schemaNavigation } from '../shared.js';
+import { asRecord, slugify, uniqueId } from '../../utils.js';
+import { at, dereferenceDocument, parseContact, schemaNavigation, setAt } from '../shared.js';
 
 export interface ParseAsyncApiOptions {
   id?: string;
+  /** Base path or URL used to resolve external `$ref`s. */
+  location?: string;
 }
+
+/**
+ * Marks where a `$ref` could not be resolved, standing in for it until {@link
+ * restoreUnresolvedRefs} swaps it back to a literal `$ref` right before a schema is
+ * normalised. See {@link preResolve} for why a literal `$ref` cannot survive that long on
+ * its own.
+ */
+const UNRESOLVED_REF_KEY = 'x-apibox-unresolved-ref';
 
 /**
  * Parse an AsyncAPI document.
@@ -31,34 +41,40 @@ export interface ParseAsyncApiOptions {
  * whole reason it is worth the dependency — most AsyncAPI in the wild is still 2.x, and
  * we would otherwise have to model both shapes ourselves.
  *
- * Note on dereferencing: unlike OpenAPI and OpenRPC, this does not go through the shared
- * `dereferenceDocument` helper in `../shared.js`. `@asyncapi/parser` does its own
- * resolution as part of `parser.parse`, and every accessor used below (`.address()`,
- * `.payload()`, etc.) already returns post-resolution values — there is no second pass to
- * run.
+ * Note on dereferencing: unlike OpenAPI and OpenRPC, `@asyncapi/parser` does its own `$ref`
+ * resolution as part of `parser.parse`, and — this was checked empirically against a broken
+ * `$ref`, both an unreachable external URL and a dangling internal pointer — it throws and
+ * abandons the *entire* document rather than degrading the one broken pointer the way
+ * `dereferenceDocument`'s `continueOnError` lets OpenAPI/OpenRPC do.
  *
- * This was checked empirically against a broken `$ref` (both an unreachable external URL
- * and a dangling internal pointer) and the result is a confirmed parity gap, not merely an
- * unverified difference: `@asyncapi/parser` throws and abandons the *entire* document on
- * either failure, where `dereferenceDocument`'s `continueOnError` lets OpenAPI/OpenRPC
- * salvage everything except the broken reference. A single bad `$ref` anywhere in an
- * AsyncAPI document currently makes the whole document fail to load in apibox, which
- * `UnsupportedDocumentError` below reports as an (unhelpfully blunt) parse failure. Fixing
- * this would mean either pre-resolving refs through the shared helper before handing the
- * document to `@asyncapi/parser`, or catching the specific resolver failure and retrying
- * with the offending pointer stubbed out — both are a meaningfully larger change than the
- * rest of this file, so this is left as a confirmed, reported gap rather than fixed here.
+ * Pre-resolving through the shared `dereferenceDocument` helper before handing the document
+ * to `@asyncapi/parser` (see {@link preResolve}) is not enough on its own: `continueOnError`
+ * deliberately *leaves the unresolvable `$ref` in place* so a later pass can mark it, but
+ * `@asyncapi/parser` runs its own resolution on whatever it is given next and throws on that
+ * exact same leftover `$ref`, for the same reason it threw the first time. Every `$ref`
+ * `preResolve` could not resolve is therefore additionally substituted with a
+ * {@link UNRESOLVED_REF_KEY} marker — a vendor-extension key `@asyncapi/parser` treats as
+ * inert data, unlike `$ref` — so the document it receives has none left to trip over.
+ * `restoreUnresolvedRefs` swaps each marker back into the literal `$ref` shape right before
+ * a schema reaches `normaliseSchema`, which already knows how to turn that into
+ * {@link SchemaNode.unresolvedRef} — the same marker OpenAPI and OpenRPC produce for the
+ * same failure.
  */
 export async function parseAsyncApi(
   raw: unknown,
   options: ParseAsyncApiOptions = {},
 ): Promise<AsyncApiDocument> {
-  const parser = new Parser();
-  const { document, diagnostics } = await parser.parse(raw as never);
+  const warnings: string[] = [];
+  const input = await preResolve(raw, options.location, warnings);
 
-  const warnings = diagnostics
-    .filter((d) => d.severity <= 1) // 0 = error, 1 = warning
-    .map((d) => `${d.message}${d.path?.length ? ` (at ${d.path.join('.')})` : ''}`);
+  const parser = new Parser();
+  const { document, diagnostics } = await parser.parse(input as never);
+
+  warnings.push(
+    ...diagnostics
+      .filter((d) => d.severity <= 1) // 0 = error, 1 = warning
+      .map((d) => `${d.message}${d.path?.length ? ` (at ${d.path.join('.')})` : ''}`),
+  );
 
   if (!document) {
     throw new UnsupportedDocumentError(
@@ -213,7 +229,7 @@ export async function parseAsyncApi(
     .components()
     .schemas()
     .all()
-    .map((schema) => normaliseSchema(schema.json(), {}, schema.id()))
+    .map((schema) => normaliseAsyncApiSchema(schema.json(), {}, schema.id()))
     .filter((node): node is SchemaNode => Boolean(node));
 
   const license = safe(() => info.license());
@@ -251,6 +267,97 @@ export async function parseAsyncApi(
   };
 }
 
+/**
+ * Find every `$ref` `@asyncapi/parser` would fail to resolve, and patch *only* those into
+ * an {@link UNRESOLVED_REF_KEY} marker in an otherwise-untouched clone of the original
+ * document. See the module doc comment above for why a marker is needed at all, rather than
+ * just leaving the broken `$ref` in place.
+ *
+ * The fully pre-resolved document `dereferenceDocument` returns is deliberately discarded
+ * rather than handed to `@asyncapi/parser`: recovering a security scheme's name from a
+ * `$ref` to it (see `securitySchemeNames` below) relies on object identity surviving
+ * `@asyncapi/parser`'s *own* resolution, and pre-inlining every valid `$ref` here breaks
+ * that identity before the parser ever sees it. Every `$ref` that *does* resolve is left
+ * exactly as authored, for `@asyncapi/parser` to resolve itself, same as before this fix.
+ *
+ * Not an object is left untouched rather than rejected here — `@asyncapi/parser` gives a
+ * clearer, format-specific error for that than this function could.
+ */
+async function preResolve(
+  raw: unknown,
+  location: string | undefined,
+  warnings: string[],
+): Promise<unknown> {
+  const root = asRecord(raw);
+  if (!root) return raw;
+
+  const unresolved: Array<{ path: string[]; ref: string }> = [];
+  await dereferenceDocument(root, location, warnings, {
+    // Irrelevant to correctness here -- the resolved output is discarded -- but avoids
+    // pointlessly building native cyclic objects for a genuinely circular $ref.
+    circular: 'ignore',
+    onUnresolved: (path, ref) => unresolved.push({ path, ref }),
+  });
+  if (unresolved.length === 0) return raw;
+
+  const input = structuredClone(root);
+  for (const { path, ref } of unresolved) stubUnresolvedRef(input, path, ref);
+  return input;
+}
+
+/** Replace the `$ref` at `path` with an {@link UNRESOLVED_REF_KEY} marker, in place. */
+function stubUnresolvedRef(root: Record<string, unknown>, path: string[], ref: string): void {
+  if (path.length === 0) return;
+
+  let parent: unknown = root;
+  for (const segment of path.slice(0, -1)) {
+    parent = at(parent, segment);
+    if (parent === undefined || parent === null) return;
+  }
+
+  const key = path[path.length - 1];
+  if (key === undefined) return;
+
+  setAt(parent, key, { [UNRESOLVED_REF_KEY]: ref });
+}
+
+/**
+ * Swap an {@link UNRESOLVED_REF_KEY} marker back into a literal `$ref`, recursively.
+ *
+ * Cycle-safe by object identity: a schema that survived resolution can be genuinely
+ * circular (see `DereferenceOptions.circular`), and this must not chase its own tail.
+ */
+function restoreUnresolvedRefs(node: unknown, seen: Set<object> = new Set()): unknown {
+  if (typeof node !== 'object' || node === null) return node;
+  if (seen.has(node)) return node;
+  seen.add(node);
+
+  if (Array.isArray(node)) {
+    for (let i = 0; i < node.length; i++) node[i] = restoreUnresolvedRefs(node[i], seen);
+    return node;
+  }
+
+  const record = node as Record<string, unknown>;
+  const marker = record[UNRESOLVED_REF_KEY];
+  // Not a single-key check: `@asyncapi/parser` stamps its own `x-parser-schema-id` onto
+  // every schema it touches, including this stub, so the marker key can have company.
+  if (typeof marker === 'string') {
+    return { $ref: marker };
+  }
+
+  for (const key of Object.keys(record)) record[key] = restoreUnresolvedRefs(record[key], seen);
+  return record;
+}
+
+/** `normaliseSchema`, restoring any {@link UNRESOLVED_REF_KEY} marker first. */
+function normaliseAsyncApiSchema(
+  raw: unknown,
+  options?: Parameters<typeof normaliseSchema>[1],
+  name?: string,
+): SchemaNode | undefined {
+  return normaliseSchema(restoreUnresolvedRefs(raw), options, name);
+}
+
 /** AsyncAPI 2.x channels have no title; the accessor only exists on the 3.x model. */
 function readTitle(channel: unknown): string | undefined {
   const titled = channel as { title?: () => string | undefined };
@@ -267,7 +374,7 @@ function parseChannelParameters(channel: any): Parameter[] {
     in: 'path' as const,
     description: safe(() => parameter.description()),
     required: true,
-    schema: normaliseSchema(parameterSchema(parameter)),
+    schema: normaliseAsyncApiSchema(parameterSchema(parameter)),
   }));
 }
 
@@ -351,7 +458,7 @@ function normalisePayloadLike(
   if (!schema) return {};
   const format = safe(() => schema.schemaFormat()) ?? defaultSchemaFormat;
   if (format !== defaultSchemaFormat) return { format };
-  return { schema: normaliseSchema(safe(() => schema.json())) };
+  return { schema: normaliseAsyncApiSchema(safe(() => schema.json())) };
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: the parser's example model is structurally typed

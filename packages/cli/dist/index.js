@@ -443,14 +443,14 @@ function pushBound(schema, boundKey, exclusiveKey, label) {
 
 // packages/core/src/formats/shared.ts
 import $RefParser from "@apidevtools/json-schema-ref-parser";
-async function dereferenceDocument(root, location, warnings) {
+async function dereferenceDocument(root, location, warnings, options = {}) {
   const parser = new $RefParser;
   const processLike = globalThis.process;
   const base = location ?? (processLike?.cwd ? `${processLike.cwd()}/` : "https://apibox.local/");
   try {
     const resolved = await parser.dereference(base, structuredClone(root), {
       continueOnError: true,
-      dereference: { circular: true }
+      dereference: { circular: options.circular ?? true }
     });
     return resolved;
   } catch (error) {
@@ -462,7 +462,9 @@ async function dereferenceDocument(root, location, warnings) {
     }
     for (const failure of failures) {
       warnings.push(`Could not resolve $ref at ${failure.path.join(".") || "(root)"}: ${failure.message}`);
-      restoreRef(partial, root, failure);
+      const ref = restoreRef(partial, root, failure);
+      if (ref)
+        options.onUnresolved?.(failure.path, ref);
     }
     return partial;
   }
@@ -541,6 +543,7 @@ function restoreRef(target, original, failure) {
   const originalRef = asRecord(source)?.$ref;
   const ref = typeof originalRef === "string" ? originalRef : targetOf(failure.message) ?? path.join("/");
   setAt(parent, key, { $ref: ref });
+  return ref;
 }
 function targetOf(message) {
   return /(https?:\/\/\S+?)(?::\s|$)/.exec(message)?.[1];
@@ -608,10 +611,13 @@ function isExtensionKey(key) {
 }
 
 // packages/core/src/formats/asyncapi/index.ts
+var UNRESOLVED_REF_KEY = "x-apibox-unresolved-ref";
 async function parseAsyncApi(raw, options = {}) {
+  const warnings = [];
+  const input = await preResolve(raw, options.location, warnings);
   const parser = new Parser;
-  const { document, diagnostics } = await parser.parse(raw);
-  const warnings = diagnostics.filter((d) => d.severity <= 1).map((d) => `${d.message}${d.path?.length ? ` (at ${d.path.join(".")})` : ""}`);
+  const { document, diagnostics } = await parser.parse(input);
+  warnings.push(...diagnostics.filter((d) => d.severity <= 1).map((d) => `${d.message}${d.path?.length ? ` (at ${d.path.join(".")})` : ""}`));
   if (!document) {
     throw new UnsupportedDocumentError(`The AsyncAPI document could not be parsed.${warnings.length ? ` ${warnings[0]}` : ""}`);
   }
@@ -674,7 +680,7 @@ async function parseAsyncApi(raw, options = {}) {
     parameters: parseChannelParameters(channel),
     servers: nonEmpty(safe(() => channel.servers().all().map((server) => server.id())))
   }));
-  const schemas = document.components().schemas().all().map((schema) => normaliseSchema(schema.json(), {}, schema.id())).filter((node) => Boolean(node));
+  const schemas = document.components().schemas().all().map((schema) => normaliseAsyncApiSchema(schema.json(), {}, schema.id())).filter((node) => Boolean(node));
   const license = safe(() => info.license());
   return {
     id: options.id ?? slugify(title),
@@ -702,6 +708,59 @@ async function parseAsyncApi(raw, options = {}) {
     warnings
   };
 }
+async function preResolve(raw, location, warnings) {
+  const root = asRecord(raw);
+  if (!root)
+    return raw;
+  const unresolved = [];
+  await dereferenceDocument(root, location, warnings, {
+    circular: "ignore",
+    onUnresolved: (path, ref) => unresolved.push({ path, ref })
+  });
+  if (unresolved.length === 0)
+    return raw;
+  const input = structuredClone(root);
+  for (const { path, ref } of unresolved)
+    stubUnresolvedRef(input, path, ref);
+  return input;
+}
+function stubUnresolvedRef(root, path, ref) {
+  if (path.length === 0)
+    return;
+  let parent = root;
+  for (const segment of path.slice(0, -1)) {
+    parent = at(parent, segment);
+    if (parent === undefined || parent === null)
+      return;
+  }
+  const key = path[path.length - 1];
+  if (key === undefined)
+    return;
+  setAt(parent, key, { [UNRESOLVED_REF_KEY]: ref });
+}
+function restoreUnresolvedRefs(node, seen = new Set) {
+  if (typeof node !== "object" || node === null)
+    return node;
+  if (seen.has(node))
+    return node;
+  seen.add(node);
+  if (Array.isArray(node)) {
+    for (let i = 0;i < node.length; i++)
+      node[i] = restoreUnresolvedRefs(node[i], seen);
+    return node;
+  }
+  const record = node;
+  const marker = record[UNRESOLVED_REF_KEY];
+  if (typeof marker === "string") {
+    return { $ref: marker };
+  }
+  for (const key of Object.keys(record))
+    record[key] = restoreUnresolvedRefs(record[key], seen);
+  return record;
+}
+function normaliseAsyncApiSchema(raw, options, name) {
+  return normaliseSchema(restoreUnresolvedRefs(raw), options, name);
+}
 function readTitle(channel) {
   const titled = channel;
   return typeof titled.title === "function" ? titled.title() : undefined;
@@ -713,7 +772,7 @@ function parseChannelParameters(channel) {
     in: "path",
     description: safe(() => parameter.description()),
     required: true,
-    schema: normaliseSchema(parameterSchema(parameter))
+    schema: normaliseAsyncApiSchema(parameterSchema(parameter))
   }));
 }
 function parameterSchema(parameter) {
@@ -754,7 +813,7 @@ function normalisePayloadLike(schema, defaultSchemaFormat) {
   const format = safe(() => schema.schemaFormat()) ?? defaultSchemaFormat;
   if (format !== defaultSchemaFormat)
     return { format };
-  return { schema: normaliseSchema(safe(() => schema.json())) };
+  return { schema: normaliseAsyncApiSchema(safe(() => schema.json())) };
 }
 function toExamples2(examples) {
   if (examples.length === 0)

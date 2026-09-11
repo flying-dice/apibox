@@ -772,42 +772,126 @@ describe('AsyncAPI', () => {
     );
   });
 
-  it('confirms AsyncAPI dereferencing does not have OpenAPI/OpenRPC unresolved-$ref parity: a broken $ref fails the whole document rather than degrading', async () => {
+  it('degrades a dangling internal $ref instead of failing the whole document', async () => {
     // Unlike `dereferenceDocument` (packages/core/src/formats/shared.ts), which resolves
     // with `continueOnError` and marks only the broken pointer, `@asyncapi/parser` throws
-    // and abandons the entire document on a single dangling `$ref`. This is the confirmed
-    // answer to the "verify dereference warning parity" checklist item -- it is a real gap,
-    // not merely unverified.
-    await expect(
-      parseApiDocument({
-        asyncapi: '3.0.0',
-        info: { title: 'Broken ref', version: '1.0.0' },
-        channels: {
-          readings: {
-            address: 'readings',
-            messages: { reading: { $ref: '#/components/messages/Reading' } },
-          },
+    // and abandons the entire document on a single dangling `$ref` -- confirmed empirically
+    // (see the module doc comment at formats/asyncapi/index.ts) before this test existed to
+    // pin the fix instead of the bug.
+    const doc = (await parseApiDocument({
+      asyncapi: '3.0.0',
+      info: { title: 'Broken ref', version: '1.0.0' },
+      channels: {
+        readings: {
+          address: 'readings',
+          messages: { reading: { $ref: '#/components/messages/Reading' } },
         },
-        operations: {
-          receiveReadings: { action: 'receive', channel: { $ref: '#/channels/readings' } },
-        },
-        components: {
-          messages: {
-            Reading: {
-              name: 'reading',
-              payload: {
-                type: 'object',
-                properties: { external: { $ref: '#/components/schemas/DoesNotExist' } },
+      },
+      operations: {
+        receiveReadings: { action: 'receive', channel: { $ref: '#/channels/readings' } },
+      },
+      components: {
+        messages: {
+          Reading: {
+            name: 'reading',
+            payload: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                external: { $ref: '#/components/schemas/DoesNotExist' },
               },
             },
           },
         },
-      }),
-    ).rejects.toThrow(UnsupportedDocumentError);
+      },
+    })) as AsyncApiDocument;
+
+    // The failure is reported rather than swallowed, and names the offending pointer --
+    // the same wording OpenAPI/OpenRPC use, since this goes through the same
+    // `dereferenceDocument` helper they do.
+    expect(doc.warnings).toContainEqual(
+      expect.stringMatching(
+        /Could not resolve \$ref at components\.messages\.Reading\.payload\.properties\.external.*DoesNotExist/,
+      ),
+    );
+
+    // Everything resolvable still renders: the operation, its channel and the sibling
+    // property on the very schema the broken $ref lives inside.
+    const payload = doc.operations[0]?.messages[0]?.payload;
+    expect(doc.operations).toHaveLength(1);
+    expect(doc.operations[0]?.channelAddress).toBe('readings');
+    expect(payload?.properties?.map((p) => p.name)).toEqual(['id', 'external']);
+    expect(payload?.properties?.[0]?.types).toEqual(['string']);
+
+    // And the part that failed is explicitly marked, not silently empty or null.
+    const external = payload?.properties?.find((p) => p.name === 'external');
+    expect(external?.unresolvedRef).toBe('#/components/schemas/DoesNotExist');
+  });
+
+  it('degrades an unreachable external $ref instead of failing the whole document', async () => {
+    const doc = (await parseApiDocument({
+      asyncapi: '3.0.0',
+      info: { title: 'Broken external ref', version: '1.0.0' },
+      channels: {
+        readings: {
+          address: 'readings',
+          messages: { reading: { $ref: '#/components/messages/Reading' } },
+        },
+      },
+      operations: {
+        receiveReadings: { action: 'receive', channel: { $ref: '#/channels/readings' } },
+      },
+      components: {
+        messages: {
+          Reading: {
+            name: 'reading',
+            payload: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                external: {
+                  $ref: 'https://example.invalid/nope.yaml#/components/schemas/Missing',
+                },
+              },
+            },
+          },
+        },
+      },
+    })) as AsyncApiDocument;
+
+    expect(doc.warnings).toContainEqual(
+      expect.stringMatching(
+        /Could not resolve \$ref at components\.messages\.Reading\.payload\.properties\.external.*example\.invalid/,
+      ),
+    );
+
+    const payload = doc.operations[0]?.messages[0]?.payload;
+    expect(payload?.properties?.map((p) => p.name)).toEqual(['id', 'external']);
+    const external = payload?.properties?.find((p) => p.name === 'external');
+    expect(external?.unresolvedRef).toBe(
+      'https://example.invalid/nope.yaml#/components/schemas/Missing',
+    );
+  });
+
+  it('parses exactly as before when there are no broken $refs: no new warnings', async () => {
+    // Pins the "no behaviour change on the happy path" requirement: pre-resolving to find
+    // broken $refs must not itself introduce warnings or otherwise perturb a clean document.
+    const doc = await load();
+    expect(doc.warnings).toEqual([]);
   });
 });
 
 describe('AsyncAPI 2.x', () => {
+  it('parses via the same pre-resolution path as 3.x, with no unresolved-$ref warnings', async () => {
+    // The fix for card 34 pre-resolves before handing the document to @asyncapi/parser
+    // regardless of spec version. Confirms that pass does not disturb an otherwise-clean
+    // 2.x document, which took a completely untouched path before this fix.
+    const doc = (await loadApiDocument(
+      fixtures('v2-streetlights.asyncapi.yaml'),
+    )) as AsyncApiDocument;
+    expect(doc.warnings.some((w) => w.includes('Could not resolve $ref'))).toBe(false);
+  });
+
   it('reads a channel parameter schema from the v2 Parameter Object', async () => {
     // 2.x nests a JSON Schema under `schema`; 3.x describes the parameter inline. Reading
     // the v2 Parameter Object itself yields an untyped parameter.
