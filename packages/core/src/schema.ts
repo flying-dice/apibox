@@ -79,7 +79,14 @@ function walk(
   }
 
   const schema = raw as Record<string, unknown>;
-  const refName = frame.options.names?.get(raw as object);
+  const mappedName = frame.options.names?.get(raw as object);
+  // `names` maps a dereferenced object back to its component name so an inlined `$ref`
+  // can be labelled with what it points to. At the root of a walk that name is instead
+  // this schema's *own* definition -- e.g. walking `definitions.Address` finds "Address"
+  // mapped to itself -- so using it as `refName` there would just echo the heading the
+  // catalog already shows. Suppress only that self-referential case; a nested schema
+  // whose identity matches a named component (a genuine inlined `$ref`) keeps its label.
+  const refName = frame.depth === 0 && mappedName === name ? undefined : mappedName;
 
   // A `$ref` still present here means dereferencing failed for it — a broken external URL,
   // typically. Render it as an explicit unresolved marker rather than an empty schema,

@@ -124,6 +124,28 @@ describe('normaliseSchema', () => {
     expect(node?.refName).toBe('Pet');
   });
 
+  it("does not label a component's own definition with its own name", () => {
+    // Regression for the schema catalog printing every entry's name twice: `names` maps a
+    // dereferenced object back to its component name so an inlined `$ref` elsewhere can be
+    // labelled, but walking the *definition itself* hits the same map entry by identity.
+    // Card 27's toolbar summary must fall back to describing the shape (`object`), not echo
+    // the heading a caller already renders above it.
+    const address = { type: 'object', properties: { city: { type: 'string' } } };
+    const names = new Map<object, string>([[address, 'Address']]);
+    const node = normaliseSchema(address, { names }, 'Address');
+    expect(node?.name).toBe('Address');
+    expect(node?.refName).toBeUndefined();
+  });
+
+  it('still labels a genuine inlined $ref to a named component', () => {
+    // The same identity lookup nested one level down is not self-reference: it is a
+    // property whose value, after dereferencing, points at another named schema.
+    const address = { type: 'object', properties: { city: { type: 'string' } } };
+    const names = new Map<object, string>([[address, 'Address']]);
+    const node = normaliseSchema({ type: 'object', properties: { home: address } }, { names });
+    expect(node?.properties?.[0]?.refName).toBe('Address');
+  });
+
   it('marks an unresolved $ref nested inside a property', () => {
     const node = normaliseSchema({
       type: 'object',

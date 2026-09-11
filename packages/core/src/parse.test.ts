@@ -852,6 +852,7 @@ describe('JSON-RPC', () => {
     expect(getBalance?.params.map((p) => [p.name, p.required])).toEqual([
       ['address', true],
       ['block', false],
+      ['legacyFormat', false],
     ]);
     expect(getBalance?.result?.name).toBe('balance');
     expect(getBalance?.errors).toEqual([
@@ -937,6 +938,95 @@ describe('JSON-RPC', () => {
       'transfers',
       'subscriptions',
       'Schemas',
+    ]);
+  });
+
+  it('parses info.summary, root externalDocs and root x-* extensions', async () => {
+    const doc = await load();
+    expect(doc.summary).toBe('Query balances and send transfers over JSON-RPC.');
+    expect(doc.externalDocs).toEqual({
+      description: 'Full API guide',
+      url: 'https://docs.example.com/wallet-rpc',
+    });
+    expect(doc.extensions).toEqual([{ key: 'x-internal-id', value: 'wallet-rpc' }]);
+  });
+
+  it('parses server variables from the map form of the Server Object', async () => {
+    const doc = await load();
+    const server = doc.servers[0];
+    expect(server?.url).toBe('https://{environment}.rpc.example.com');
+    expect(server?.variables).toEqual([
+      {
+        name: 'environment',
+        default: 'mainnet',
+        description: 'Network to connect to.',
+        enum: ['mainnet', 'testnet'],
+      },
+    ]);
+  });
+
+  it('keeps tag description and externalDocs, not just the name', async () => {
+    const doc = await load();
+    const accounts = doc.tags.find((t) => t.name === 'accounts');
+    expect(accounts?.description).toBe('Methods for inspecting account state.');
+    expect(accounts?.externalDocs?.url).toBe('https://docs.example.com/accounts');
+  });
+
+  it('parses method.links with its own params, target method and no server override', async () => {
+    const doc = await load();
+    const link = doc.methods.find((m) => m.name === 'getBalance')?.links[0];
+    expect(link?.name).toBe('SendTransferFromAccount');
+    expect(link?.summary).toBe('Send a transfer once the balance is known');
+    expect(link?.method).toBe('sendTransfer');
+    expect(link?.params).toEqual([{ name: 'transaction', value: '$params.address' }]);
+    expect(link?.server).toBeUndefined();
+  });
+
+  it('parses a per-method server override, independent of the document default', async () => {
+    const doc = await load();
+    const sendTransfer = doc.methods.find((m) => m.name === 'sendTransfer');
+    expect(sendTransfer?.servers).toEqual([
+      { name: 'relay', url: 'https://relay.example.com', description: 'Dedicated broadcast relay' },
+    ]);
+    expect(sendTransfer?.externalDocs?.url).toBe('https://docs.example.com/sendTransfer');
+  });
+
+  it('captures the deprecated flag on a result ContentDescriptor', async () => {
+    const doc = await load();
+    expect(doc.methods.find((m) => m.name === 'sendTransfer')?.result?.deprecated).toBe(true);
+    expect(doc.methods.find((m) => m.name === 'getBalance')?.result?.deprecated).toBe(false);
+  });
+
+  it('captures the deprecated flag on a param', async () => {
+    const doc = await load();
+    const legacyFormat = doc.methods
+      .find((m) => m.name === 'getBalance')
+      ?.params.find((p) => p.name === 'legacyFormat');
+    expect(legacyFormat?.deprecated).toBe(true);
+  });
+
+  it('defaults specVersion to the current OpenRPC release when the document omits `openrpc`', async () => {
+    const doc = (await parseApiDocument(
+      { info: { title: 'No version field', version: '1.0.0' }, methods: [] },
+      { format: 'jsonrpc' },
+    )) as JsonRpcDocument;
+    expect(doc.specVersion).toBe('1.3.2');
+  });
+
+  it('resolves a $ref to components.tags and keeps its description', async () => {
+    const doc = (await parseApiDocument({
+      openrpc: '1.3.2',
+      info: { title: 'Shared tag', version: '1.0.0' },
+      methods: [
+        { name: 'a', tags: [{ $ref: '#/components/tags/shared' }], params: [] },
+        { name: 'b', tags: [{ $ref: '#/components/tags/shared' }], params: [] },
+      ],
+      components: {
+        tags: { shared: { name: 'shared', description: 'A tag reused by two methods.' } },
+      },
+    })) as JsonRpcDocument;
+    expect(doc.tags).toEqual([
+      { name: 'shared', description: 'A tag reused by two methods.', externalDocs: undefined },
     ]);
   });
 });

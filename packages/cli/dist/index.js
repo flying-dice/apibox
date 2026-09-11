@@ -181,7 +181,8 @@ function walk(raw, name, required, frame) {
     return { name, required, types: [] };
   }
   const schema = raw;
-  const refName = frame.options.names?.get(raw);
+  const mappedName = frame.options.names?.get(raw);
+  const refName = frame.depth === 0 && mappedName === name ? undefined : mappedName;
   const unresolvedRef = typeof schema.$ref === "string" ? schema.$ref : undefined;
   if (unresolvedRef) {
     return {
@@ -876,33 +877,62 @@ async function parseJsonRpc(raw, options = {}) {
   const names = collectComponentNames(dereferenced);
   const info = asRecord(dereferenced.info) ?? {};
   const title = asString(info.title) ?? "Untitled API";
-  const methods = parseMethods(dereferenced, names, warnings);
+  const tagInfoByName = new Map;
+  const methods = parseMethods(dereferenced, names, tagInfoByName, warnings);
   const schemas = parseComponentSchemas(dereferenced, names);
   return {
     id: options.id ?? slugify(title),
     kind: "jsonrpc",
-    specVersion: asString(dereferenced.openrpc) ?? "1.2.6",
+    specVersion: asString(dereferenced.openrpc) ?? "1.3.2",
     title,
     version: asString(info.version) ?? "0.0.0",
+    summary: asString(info.summary),
     description: asString(info.description),
     contact: parseContact(info.contact),
     license: parseLicense(info.license),
+    externalDocs: parseExternalDocs(dereferenced.externalDocs),
     servers: parseServers(dereferenced.servers),
-    tags: collectTags(methods),
+    tags: collectTags(methods, tagInfoByName),
     methods,
     schemas,
     nav: buildNav2(methods, schemas),
-    warnings
+    warnings,
+    extensions: parseExtensions(dereferenced)
   };
+}
+function parseExtensions(record) {
+  const entries = Object.entries(record).filter(([key]) => isExtensionKey(key));
+  return entries.length > 0 ? entries.map(([key, value]) => ({ key, value })) : undefined;
 }
 function parseServers(raw) {
   return asArray(raw).map((entry) => asRecord(entry)).filter((entry) => Boolean(entry)).map((entry) => ({
     name: asString(entry.name) ?? asString(entry.url) ?? "server",
     url: asString(entry.url) ?? "",
-    description: asString(entry.summary) ?? asString(entry.description)
+    description: asString(entry.summary) ?? asString(entry.description),
+    variables: parseServerVariables(entry.variables)
   }));
 }
-function parseMethods(root, names, warnings) {
+function parseServerVariables(raw) {
+  const variables = asRecord(raw);
+  if (!variables)
+    return;
+  const entries = Object.entries(variables).flatMap(([name, value]) => {
+    const variable = asRecord(value);
+    if (!variable)
+      return [];
+    const enumValues = asArray(variable.enum).map((entry) => asString(entry)).filter((entry) => Boolean(entry));
+    return [
+      {
+        name,
+        default: asString(variable.default),
+        description: asString(variable.description),
+        enum: enumValues.length > 0 ? enumValues : undefined
+      }
+    ];
+  });
+  return entries.length > 0 ? entries : undefined;
+}
+function parseMethods(root, names, tagInfoByName, warnings) {
   const rawMethods = asArray(root.methods);
   if (rawMethods.length === 0)
     warnings.push("The document declares no methods.");
@@ -910,22 +940,58 @@ function parseMethods(root, names, warnings) {
   return rawMethods.map((entry) => asRecord(entry)).filter((entry) => Boolean(entry && asString(entry.name))).map((entry) => {
     const name = asString(entry.name);
     const result = asRecord(entry.result);
+    const servers = parseServers(entry.servers);
     return {
       id: uniqueId(slugify(name), taken),
       name,
       summary: asString(entry.summary),
       description: asString(entry.description),
       deprecated: entry.deprecated === true,
-      tags: asArray(entry.tags).map((tag) => asString(asRecord(tag)?.name) ?? asString(tag)).filter((tag) => Boolean(tag)),
+      tags: asArray(entry.tags).map((tag) => {
+        const record = asRecord(tag);
+        const tagName = asString(record?.name) ?? asString(tag);
+        if (tagName && record && !tagInfoByName.has(tagName)) {
+          tagInfoByName.set(tagName, {
+            name: tagName,
+            description: asString(record.description),
+            externalDocs: parseExternalDocs(record.externalDocs)
+          });
+        }
+        return tagName;
+      }).filter((tag) => Boolean(tag)),
       paramStructure: toParamStructure(asString(entry.paramStructure)),
       params: parseParams(entry.params, names),
       result: result ? {
         name: asString(result.name) ?? "result",
         description: asString(result.description) ?? asString(result.summary),
-        schema: normaliseSchema(result.schema, { names })
+        schema: normaliseSchema(result.schema, { names }),
+        deprecated: result.deprecated === true
       } : undefined,
       errors: parseErrors(entry.errors, names),
-      examples: parseExamples(entry.examples, toParamStructure(asString(entry.paramStructure)))
+      examples: parseExamples(entry.examples, toParamStructure(asString(entry.paramStructure))),
+      links: parseLinks(entry.links),
+      servers: servers.length > 0 ? servers : undefined,
+      externalDocs: parseExternalDocs(entry.externalDocs),
+      extensions: parseExtensions(entry)
+    };
+  });
+}
+function parseLinks(raw) {
+  return asArray(raw).map((entry) => asRecord(entry)).filter((entry) => Boolean(entry && asString(entry.name))).map((entry) => {
+    const params = asRecord(entry.params);
+    const server = asRecord(entry.server);
+    return {
+      name: asString(entry.name),
+      description: asString(entry.description),
+      summary: asString(entry.summary),
+      method: asString(entry.method),
+      params: params ? Object.entries(params).map(([paramName, value]) => ({ name: paramName, value })) : undefined,
+      server: server ? {
+        name: asString(server.name) ?? asString(server.url) ?? "server",
+        url: asString(server.url) ?? "",
+        description: asString(server.summary) ?? asString(server.description),
+        variables: parseServerVariables(server.variables)
+      } : undefined
     };
   });
 }
@@ -966,7 +1032,7 @@ function parseExamples(raw, structure) {
     };
   });
 }
-function collectTags(methods) {
+function collectTags(methods, tagInfoByName) {
   const seen = new Set;
   const tags = [];
   for (const method of methods) {
@@ -974,7 +1040,7 @@ function collectTags(methods) {
       if (seen.has(tag))
         continue;
       seen.add(tag);
-      tags.push({ name: tag });
+      tags.push(tagInfoByName.get(tag) ?? { name: tag });
     }
   }
   return tags;

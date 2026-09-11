@@ -1,19 +1,42 @@
 {
   "openrpc": "1.2.6",
+  "x-internal-id": "wallet-rpc",
   "info": {
     "title": "Wallet RPC",
     "version": "2.1.0",
+    "summary": "Query balances and send transfers over JSON-RPC.",
     "description": "A JSON-RPC 2.0 interface for querying balances and sending transfers."
   },
+  "externalDocs": {
+    "description": "Full API guide",
+    "url": "https://docs.example.com/wallet-rpc"
+  },
   "servers": [
-    { "name": "mainnet", "url": "https://rpc.example.com", "summary": "Production node" }
+    {
+      "name": "mainnet",
+      "url": "https://{environment}.rpc.example.com",
+      "summary": "Production node",
+      "variables": {
+        "environment": {
+          "default": "mainnet",
+          "enum": ["mainnet", "testnet"],
+          "description": "Network to connect to."
+        }
+      }
+    }
   ],
   "methods": [
     {
       "name": "getBalance",
       "summary": "Get an account balance",
       "description": "Returns the confirmed balance of an account, in the smallest unit.",
-      "tags": [{ "name": "accounts" }],
+      "tags": [
+        {
+          "name": "accounts",
+          "description": "Methods for inspecting account state.",
+          "externalDocs": { "url": "https://docs.example.com/accounts" }
+        }
+      ],
       "params": [
         {
           "name": "address",
@@ -28,6 +51,13 @@
           "schema": {
             "oneOf": [{ "type": "integer" }, { "type": "string", "enum": ["latest", "pending"] }]
           }
+        },
+        {
+          "name": "legacyFormat",
+          "description": "Return the balance as a hex string instead of decimal.",
+          "required": false,
+          "deprecated": true,
+          "schema": { "type": "boolean" }
         }
       ],
       "result": {
@@ -42,6 +72,17 @@
           "params": [{ "name": "address", "value": "0x0000000000000000000000000000000000000001" }],
           "result": { "name": "balance", "value": "1250000000000000000" }
         }
+      ],
+      "links": [
+        {
+          "name": "SendTransferFromAccount",
+          "summary": "Send a transfer once the balance is known",
+          "description": "Chain into sendTransfer using this account as the transaction sender.",
+          "method": "sendTransfer",
+          "params": {
+            "transaction": "$params.address"
+          }
+        }
       ]
     },
     {
@@ -49,6 +90,14 @@
       "summary": "Send a transfer",
       "description": "Submits a signed transfer to the network and returns its hash.",
       "tags": [{ "name": "transfers" }],
+      "externalDocs": { "url": "https://docs.example.com/sendTransfer" },
+      "servers": [
+        {
+          "name": "relay",
+          "url": "https://relay.example.com",
+          "summary": "Dedicated broadcast relay"
+        }
+      ],
       "params": [
         {
           "name": "transaction",
@@ -58,7 +107,9 @@
       ],
       "result": {
         "name": "hash",
-        "schema": { "type": "string", "description": "The transaction hash." }
+        "description": "The transaction hash. Superseded by `transactionHash` on the relay server.",
+        "schema": { "type": "string", "description": "The transaction hash." },
+        "deprecated": true
       },
       "errors": [
         { "code": -32002, "message": "Insufficient funds" },

@@ -519,6 +519,25 @@ export interface RpcExample {
   result: unknown;
 }
 
+/**
+ * OpenRPC's Link Object: a runtime-determined cross-reference from one method's result to
+ * another method call, e.g. "call `getBlock` using this result's `hash`". `params` values
+ * are kept verbatim -- the spec permits either a literal value or a runtime expression
+ * string (`$response.result#/...`), and apibox has no way to evaluate either, so both are
+ * shown as the reader would need to interpret them by hand.
+ */
+export interface RpcLink {
+  name: string;
+  description?: string;
+  summary?: string;
+  /** Name of the method this link points to. */
+  method?: string;
+  /** Param name -> literal value or runtime expression, in declaration order. */
+  params?: Array<{ name: string; value: unknown }>;
+  /** Overrides the server a linked call should be made against. */
+  server?: ServerInfo;
+}
+
 export interface RpcMethod {
   id: string;
   name: string;
@@ -529,9 +548,18 @@ export interface RpcMethod {
   /** `by-name` when the method takes named params, `by-position` for an array. */
   paramStructure: 'by-name' | 'by-position' | 'either';
   params: RpcParam[];
-  result?: { name: string; description?: string; schema?: SchemaNode };
+  result?: { name: string; description?: string; schema?: SchemaNode; deprecated?: boolean };
   errors: RpcError[];
   examples: RpcExample[];
+  links: RpcLink[];
+  /** Per-method server override, when the document narrows it away from the document default. */
+  servers?: ServerInfo[];
+  externalDocs?: ExternalDocs;
+  /**
+   * `x-*` specification extensions found directly on this Method Object, in declaration
+   * order. Same shape and rendering philosophy as {@link SchemaNode.extensions}.
+   */
+  extensions?: Array<{ key: string; value: unknown }>;
 }
 
 export interface JsonRpcDocument extends ApiDocumentBase {
@@ -539,6 +567,8 @@ export interface JsonRpcDocument extends ApiDocumentBase {
   specVersion: string;
   methods: RpcMethod[];
   schemas: SchemaNode[];
+  /** `x-*` specification extensions found at the document root, in declaration order. */
+  extensions?: Array<{ key: string; value: unknown }>;
 }
 
 /* -------------------------------------------------------------------------- */

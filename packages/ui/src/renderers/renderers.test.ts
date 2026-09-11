@@ -45,6 +45,50 @@ describe('remaining format renderers', () => {
     ).toHaveTextContent('getBalance');
   });
 
+  it('renders OpenRPC links, per-method server overrides, external docs and deprecation badges', async () => {
+    const document = await example('wallet.openrpc.json');
+    if (document.kind !== 'jsonrpc') throw new Error('Expected a JSON-RPC fixture.');
+    render(JsonRpcDocument, { document });
+
+    // Root-level metadata: info.summary, externalDocs and an x-* extension.
+    expect(screen.getByTestId('jsonrpc-document-header-summary')).toHaveTextContent(
+      'Query balances and send transfers over JSON-RPC.',
+    );
+    expect(screen.getByTestId('jsonrpc-document-header-external-docs-link')).toBeInTheDocument();
+    expect(screen.getByTestId('jsonrpc-document-extension-x-internal-id')).toHaveTextContent(
+      'wallet-rpc',
+    );
+
+    // Server variables, rendered by the existing ServerList organism once populated.
+    expect(screen.getByTestId('jsonrpc-document-servers-0-variables')).toHaveTextContent(
+      'environment',
+    );
+
+    // Deprecated param and deprecated result, both parsed but previously unrendered.
+    expect(
+      screen.getByTestId('jsonrpc-document-method-getbalance-param-legacyFormat-2-deprecated'),
+    ).toHaveTextContent('deprecated');
+    expect(
+      screen.getByTestId('jsonrpc-document-method-sendtransfer-result-deprecated'),
+    ).toHaveTextContent('deprecated');
+
+    // method.links: name, target method and the runtime-expression param value.
+    expect(screen.getByTestId('jsonrpc-document-method-getbalance-link-0-title')).toHaveTextContent(
+      'SendTransferFromAccount → sendTransfer',
+    );
+    expect(
+      screen.getByTestId('jsonrpc-document-method-getbalance-link-0-param-transaction'),
+    ).toHaveTextContent('$params.address');
+
+    // method.servers (override) and method.externalDocs.
+    expect(screen.getByTestId('jsonrpc-document-method-sendtransfer-servers')).toHaveTextContent(
+      'relay.example.com',
+    );
+    expect(
+      screen.getByTestId('jsonrpc-document-method-sendtransfer-external-docs-link'),
+    ).toBeInTheDocument();
+  });
+
   it("renders a JSON Schema document's root schema, named definitions and badge/labels", async () => {
     const document = await example('user-profile.schema.json');
     if (document.kind !== 'jsonschema') throw new Error('Expected a JSON Schema fixture.');

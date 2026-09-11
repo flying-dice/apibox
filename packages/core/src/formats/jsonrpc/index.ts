@@ -5,6 +5,7 @@ import type {
   NavNode,
   RpcError,
   RpcExample,
+  RpcLink,
   RpcMethod,
   RpcParam,
   SchemaNode,
@@ -15,8 +16,10 @@ import { asArray, asRecord, asString, slugify, uniqueId } from '../../utils.js';
 import {
   collectComponentNames,
   dereferenceDocument,
+  isExtensionKey,
   parseComponentSchemas,
   parseContact,
+  parseExternalDocs,
   parseLicense,
   schemaNavigation,
 } from '../shared.js';
@@ -46,25 +49,42 @@ export async function parseJsonRpc(
   const info = asRecord(dereferenced.info) ?? {};
   const title = asString(info.title) ?? 'Untitled API';
 
-  const methods = parseMethods(dereferenced, names, warnings);
+  // Populated as a side effect of `parseMethods`, which is the only place a full (inline
+  // or $ref-resolved) Tag Object is seen -- `RpcMethod.tags` itself keeps only names.
+  const tagInfoByName = new Map<string, TagInfo>();
+  const methods = parseMethods(dereferenced, names, tagInfoByName, warnings);
   const schemas = parseComponentSchemas(dereferenced, names);
 
   return {
     id: options.id ?? slugify(title),
     kind: 'jsonrpc',
-    specVersion: asString(dereferenced.openrpc) ?? '1.2.6',
+    // The spec requires `openrpc` to be present, so this fallback is not expected to be
+    // exercised by a compliant document; kept current with the spec version this parser
+    // targets (1.3.2) rather than the long-superseded 1.2.6 it previously fell back to.
+    specVersion: asString(dereferenced.openrpc) ?? '1.3.2',
     title,
     version: asString(info.version) ?? '0.0.0',
+    summary: asString(info.summary),
     description: asString(info.description),
     contact: parseContact(info.contact),
     license: parseLicense(info.license),
+    externalDocs: parseExternalDocs(dereferenced.externalDocs),
     servers: parseServers(dereferenced.servers),
-    tags: collectTags(methods),
+    tags: collectTags(methods, tagInfoByName),
     methods,
     schemas,
     nav: buildNav(methods, schemas),
     warnings,
+    extensions: parseExtensions(dereferenced),
   };
+}
+
+/** `x-*` specification extensions found directly on `record`, in declaration order. */
+function parseExtensions(
+  record: Record<string, unknown>,
+): Array<{ key: string; value: unknown }> | undefined {
+  const entries = Object.entries(record).filter(([key]) => isExtensionKey(key));
+  return entries.length > 0 ? entries.map(([key, value]) => ({ key, value })) : undefined;
 }
 
 function parseServers(raw: unknown): ServerInfo[] {
@@ -75,12 +95,40 @@ function parseServers(raw: unknown): ServerInfo[] {
       name: asString(entry.name) ?? asString(entry.url) ?? 'server',
       url: asString(entry.url) ?? '',
       description: asString(entry.summary) ?? asString(entry.description),
+      variables: parseServerVariables(entry.variables),
     }));
+}
+
+/**
+ * The Server Object's `variables` is a map keyed by variable name (unlike AsyncAPI's list
+ * form), so this reshapes it into the same `{ name, default, description, enum }[]` that
+ * `ServerInfo.variables` already defines and `ServerList.svelte` already renders.
+ */
+function parseServerVariables(raw: unknown): ServerInfo['variables'] {
+  const variables = asRecord(raw);
+  if (!variables) return undefined;
+  const entries = Object.entries(variables).flatMap(([name, value]) => {
+    const variable = asRecord(value);
+    if (!variable) return [];
+    const enumValues = asArray(variable.enum)
+      .map((entry) => asString(entry))
+      .filter((entry): entry is string => Boolean(entry));
+    return [
+      {
+        name,
+        default: asString(variable.default),
+        description: asString(variable.description),
+        enum: enumValues.length > 0 ? enumValues : undefined,
+      },
+    ];
+  });
+  return entries.length > 0 ? entries : undefined;
 }
 
 function parseMethods(
   root: Record<string, unknown>,
   names: Map<object, string>,
+  tagInfoByName: Map<string, TagInfo>,
   warnings: string[],
 ): RpcMethod[] {
   const rawMethods = asArray(root.methods);
@@ -93,6 +141,7 @@ function parseMethods(
     .map((entry) => {
       const name = asString(entry.name) as string;
       const result = asRecord(entry.result);
+      const servers = parseServers(entry.servers);
       return {
         id: uniqueId(slugify(name), taken),
         name,
@@ -100,7 +149,21 @@ function parseMethods(
         description: asString(entry.description),
         deprecated: entry.deprecated === true,
         tags: asArray(entry.tags)
-          .map((tag) => asString(asRecord(tag)?.name) ?? asString(tag))
+          .map((tag) => {
+            // A `$ref` to `components.tags` has already been resolved to the same Tag
+            // Object it points at by the time we get here, so this sees full metadata
+            // whether the tag was declared inline or shared.
+            const record = asRecord(tag);
+            const tagName = asString(record?.name) ?? asString(tag);
+            if (tagName && record && !tagInfoByName.has(tagName)) {
+              tagInfoByName.set(tagName, {
+                name: tagName,
+                description: asString(record.description),
+                externalDocs: parseExternalDocs(record.externalDocs),
+              });
+            }
+            return tagName;
+          })
           .filter((tag): tag is string => Boolean(tag)),
         paramStructure: toParamStructure(asString(entry.paramStructure)),
         params: parseParams(entry.params, names),
@@ -109,11 +172,48 @@ function parseMethods(
               name: asString(result.name) ?? 'result',
               description: asString(result.description) ?? asString(result.summary),
               schema: normaliseSchema(result.schema, { names }),
+              deprecated: result.deprecated === true,
             }
           : undefined,
         errors: parseErrors(entry.errors, names),
         examples: parseExamples(entry.examples, toParamStructure(asString(entry.paramStructure))),
+        links: parseLinks(entry.links),
+        servers: servers.length > 0 ? servers : undefined,
+        externalDocs: parseExternalDocs(entry.externalDocs),
+        extensions: parseExtensions(entry),
       } satisfies RpcMethod;
+    });
+}
+
+/**
+ * The Link Object. `params` is a map (name -> literal value or runtime expression) rather
+ * than a list in the source document; it is reshaped into a name/value pair list so
+ * declaration order survives, the same treatment `SchemaNode.extensions` gets.
+ */
+function parseLinks(raw: unknown): RpcLink[] {
+  return asArray(raw)
+    .map((entry) => asRecord(entry))
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry && asString(entry.name)))
+    .map((entry) => {
+      const params = asRecord(entry.params);
+      const server = asRecord(entry.server);
+      return {
+        name: asString(entry.name) as string,
+        description: asString(entry.description),
+        summary: asString(entry.summary),
+        method: asString(entry.method),
+        params: params
+          ? Object.entries(params).map(([paramName, value]) => ({ name: paramName, value }))
+          : undefined,
+        server: server
+          ? {
+              name: asString(server.name) ?? asString(server.url) ?? 'server',
+              url: asString(server.url) ?? '',
+              description: asString(server.summary) ?? asString(server.description),
+              variables: parseServerVariables(server.variables),
+            }
+          : undefined,
+      } satisfies RpcLink;
     });
 }
 
@@ -177,14 +277,14 @@ function parseExamples(raw: unknown, structure: RpcMethod['paramStructure']): Rp
     });
 }
 
-function collectTags(methods: RpcMethod[]): TagInfo[] {
+function collectTags(methods: RpcMethod[], tagInfoByName: Map<string, TagInfo>): TagInfo[] {
   const seen = new Set<string>();
   const tags: TagInfo[] = [];
   for (const method of methods) {
     for (const tag of method.tags) {
       if (seen.has(tag)) continue;
       seen.add(tag);
-      tags.push({ name: tag });
+      tags.push(tagInfoByName.get(tag) ?? { name: tag });
     }
   }
   return tags;

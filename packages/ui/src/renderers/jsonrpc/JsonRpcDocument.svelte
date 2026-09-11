@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { JsonRpcDocument as JsonRpcDocumentModel } from '@apibox/core';
+  import Chip from '../../atoms/Chip.svelte';
   import DocumentHeader from '../../organisms/DocumentHeader.svelte';
   import SchemaCatalog from '../../organisms/SchemaCatalog.svelte';
   import ServerList from '../../organisms/ServerList.svelte';
@@ -18,6 +19,18 @@
 
 <article class="document" data-testid={testId}>
   <DocumentHeader {document} specVersion={document.specVersion} testId="{testId}-header" />
+  {#if document.extensions?.length}
+    <div class="extensions" data-testid="{testId}-extensions">
+      {#each document.extensions as extension (extension.key)}
+        <Chip
+          label={extension.key}
+          value={typeof extension.value === 'string' ? extension.value : JSON.stringify(extension.value)}
+          code
+          testId="{testId}-extension-{extension.key}"
+        />
+      {/each}
+    </div>
+  {/if}
   <ServerList servers={document.servers} testId="{testId}-servers" />
 
   {#each groups as group (group.node.id)}
@@ -59,5 +72,11 @@
 
   h2 {
     margin: 0 0 var(--apibox-space-4);
+  }
+
+  .extensions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--apibox-space-2);
   }
 </style>
