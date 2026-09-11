@@ -7,8 +7,9 @@
  * Each token resolves to a VS Code theme variable with a fallback. Inside a webview those
  * variables are supplied by VS Code, so documentation inherits the user's theme for free —
  * including themes we have never seen — and follows a theme switch without a reload.
- * Outside a webview, `theme-dark.css` and `theme-light.css` define the same `--vscode-*`
- * variables on `:root`, so the fallbacks are a safety net rather than the usual path.
+ * Outside a webview, the standalone dark, light and high-contrast themes define the same
+ * `--vscode-*` variables on `:root`, so the fallbacks are a safety net rather than the usual
+ * path.
  *
  * The fallbacks are Dark Modern's values, so a host that supplies nothing still renders a
  * coherent dark UI rather than a patchwork.
@@ -16,24 +17,29 @@
 
 :root {
   /* -- Surfaces ------------------------------------------------------------ */
-  --apibox-bg: var(--vscode-editor-background, #1f1f1f);
-  --apibox-bg-sunken: var(--vscode-sideBar-background, #181818);
-  --apibox-bg-raised: var(--vscode-editorWidget-background, #202020);
-  --apibox-bg-input: var(--vscode-input-background, #313131);
-  --apibox-bg-hover: var(--vscode-list-hoverBackground, #2a2d2e);
-  --apibox-bg-active: var(--vscode-list-activeSelectionBackground, #04395e);
-  --apibox-bg-code: var(--vscode-textCodeBlock-background, #2b2b2b);
+  --apibox-bg: var(--vscode-editor-background, #17191e);
+  --apibox-bg-sunken: var(--vscode-sideBar-background, #101216);
+  --apibox-bg-raised: var(--vscode-editorWidget-background, #21242b);
+  --apibox-bg-input: var(--vscode-input-background, #2a2f38);
+  --apibox-bg-hover: var(--vscode-list-hoverBackground, #2b3039);
+  --apibox-bg-toolbar-hover: var(--vscode-toolbar-hoverBackground, #2b3039);
+  --apibox-bg-active: var(--vscode-list-activeSelectionBackground, #0b4771);
+  --apibox-bg-code: var(--vscode-textCodeBlock-background, #12151a);
 
   /* -- Text ---------------------------------------------------------------- */
-  --apibox-fg: var(--vscode-foreground, #cccccc);
-  --apibox-fg-muted: var(--vscode-descriptionForeground, #9d9d9d);
+  --apibox-fg: var(--vscode-foreground, #d7dae0);
+  --apibox-fg-muted: var(--vscode-descriptionForeground, #a8adb7);
+  --apibox-fg-icon: var(--vscode-icon-foreground, #cccccc);
   --apibox-fg-on-accent: var(--vscode-button-foreground, #ffffff);
   --apibox-fg-active: var(--vscode-list-activeSelectionForeground, #ffffff);
 
   /* -- Lines --------------------------------------------------------------- */
-  --apibox-border: var(--vscode-panel-border, #2b2b2b);
-  --apibox-border-strong: var(--vscode-contrastBorder, #3c3c3c);
-  --apibox-border-input: var(--vscode-input-border, #3c3c3c);
+  --apibox-border: var(--vscode-panel-border, #303640);
+  --apibox-border-strong: var(--vscode-widget-border, #4a5361);
+  --apibox-border-input: var(--vscode-input-border, #748094);
+  --apibox-border-contrast: var(--vscode-contrastBorder, transparent);
+  --apibox-border-active: var(--vscode-contrastActiveBorder, transparent);
+  --apibox-shadow-widget: var(--vscode-widget-shadow, rgb(0 0 0 / 36%));
 
   /* -- Interaction --------------------------------------------------------- */
   --apibox-accent: var(--vscode-textLink-foreground, #4daafc);
@@ -46,9 +52,9 @@
 
   /* -- Status -------------------------------------------------------------- */
   --apibox-success: var(--vscode-charts-green, #89d185);
-  --apibox-warning: var(--vscode-charts-yellow, #cca700);
-  --apibox-danger: var(--vscode-charts-red, #f14c4c);
-  --apibox-info: var(--vscode-charts-blue, #3794ff);
+  --apibox-warning: var(--vscode-editorWarning-foreground, #cca700);
+  --apibox-danger: var(--vscode-editorError-foreground, #f14c4c);
+  --apibox-info: var(--vscode-editorInfo-foreground, #429cff);
   --apibox-neutral: var(--vscode-charts-foreground, #cccccc);
 
   /*
@@ -56,10 +62,10 @@
    * legible in any theme: a user's theme defines these, and they are chosen to be
    * distinguishable from one another by construction.
    */
-  --apibox-method-get: var(--vscode-charts-blue, #3794ff);
+  --apibox-method-get: var(--vscode-charts-blue, #429cff);
   --apibox-method-post: var(--vscode-charts-green, #89d185);
   --apibox-method-put: var(--vscode-charts-orange, #d18616);
-  --apibox-method-patch: var(--vscode-charts-purple, #b180d7);
+  --apibox-method-patch: var(--vscode-charts-purple, #ba87df);
   --apibox-method-delete: var(--vscode-charts-red, #f14c4c);
   --apibox-method-head: var(--vscode-charts-foreground, #cccccc);
   --apibox-method-options: var(--vscode-charts-foreground, #cccccc);
@@ -67,8 +73,8 @@
 
   /* AsyncAPI operation direction, and JSON-RPC methods. */
   --apibox-action-send: var(--vscode-charts-orange, #d18616);
-  --apibox-action-receive: var(--vscode-charts-blue, #3794ff);
-  --apibox-action-rpc: var(--vscode-charts-purple, #b180d7);
+  --apibox-action-receive: var(--vscode-charts-blue, #429cff);
+  --apibox-action-rpc: var(--vscode-charts-purple, #ba87df);
 
   /* -- Type ---------------------------------------------------------------- */
   --apibox-font: var(--vscode-font-family, ui-sans-serif, system-ui, -apple-system, sans-serif);

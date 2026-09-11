@@ -68,8 +68,8 @@
 
   .soft {
     color: var(--tone);
-    /* 18% keeps the fill readable in both themes without a second token per tone. */
-    background: color-mix(in srgb, var(--tone) 18%, transparent);
+    /* A quiet tint keeps status colour from competing with fields and nested surfaces. */
+    background: color-mix(in srgb, var(--tone) 8%, transparent);
   }
 
   .solid {

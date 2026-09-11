@@ -9,6 +9,7 @@ const read = (name: string) => readFileSync(fileURLToPath(new URL(name, import.m
 const tokens = read('./tokens.css');
 const dark = read('./theme-dark.css');
 const light = read('./theme-light.css');
+const highContrast = read('./theme-high-contrast.css');
 
 /** Every `--name:` declaration in a stylesheet. */
 function declared(css: string): Set<string> {
@@ -21,14 +22,17 @@ function referenced(css: string): Set<string> {
 }
 
 describe('theme parity', () => {
-  it('defines the same variables in both themes', () => {
+  it('defines the same variables in every standalone theme', () => {
     // A variable present in only one theme shows up as a fallback colour in the other,
     // which reads as "nearly right" and is easy to miss by eye.
     const inDark = declared(dark);
     const inLight = declared(light);
+    const inHighContrast = declared(highContrast);
 
     expect([...inDark].filter((name) => !inLight.has(name))).toEqual([]);
     expect([...inLight].filter((name) => !inDark.has(name))).toEqual([]);
+    expect([...inDark].filter((name) => !inHighContrast.has(name))).toEqual([]);
+    expect([...inHighContrast].filter((name) => !inDark.has(name))).toEqual([]);
   });
 
   it('defines every VS Code variable the token layer consumes', () => {
@@ -40,8 +44,10 @@ describe('theme parity', () => {
 
     const inDark = declared(dark);
     const inLight = declared(light);
+    const inHighContrast = declared(highContrast);
     expect(needed.filter((name) => !inDark.has(name))).toEqual([]);
     expect(needed.filter((name) => !inLight.has(name))).toEqual([]);
+    expect(needed.filter((name) => !inHighContrast.has(name))).toEqual([]);
   });
 
   it('gives every token a fallback', () => {
@@ -60,11 +66,13 @@ describe('theme parity', () => {
     // Quote style is the formatter's business, so match either.
     expect(dark).toMatch(/:root\[data-apibox-theme=['"]dark['"]]/);
     expect(light).toMatch(/:root\[data-apibox-theme=['"]light['"]]/);
+    expect(highContrast).toMatch(/:root\[data-apibox-theme=['"]high-contrast['"]]/);
   });
 
   it('sets color-scheme in both themes so native controls follow', () => {
     expect(dark).toMatch(/color-scheme:\s*dark/);
     expect(light).toMatch(/color-scheme:\s*light/);
+    expect(highContrast).toMatch(/color-scheme:\s*dark/);
   });
 });
 
@@ -73,6 +81,7 @@ describe('token resolution', () => {
   const themes = {
     dark: parseDeclarations(dark),
     light: parseDeclarations(light),
+    highContrast: parseDeclarations(highContrast),
   };
 
   for (const [themeName, theme] of Object.entries(themes)) {
@@ -99,7 +108,7 @@ describe('token resolution', () => {
     });
   }
 
-  it('resolves the two themes to genuinely different colours', () => {
+  it('resolves the light and dark themes to genuinely different colours', () => {
     // Catches a theme file that was copied and not edited, which the text-level parity
     // tests would happily pass.
     const identical = ALL_COLOUR_TOKENS.filter((name) => {
@@ -120,6 +129,20 @@ describe('token resolution', () => {
     expect(tokenDeclarations.get('--apibox-border')).toContain('--vscode-panel-border');
     expect(tokenDeclarations.get('--apibox-accent')).toContain('--vscode-textLink-foreground');
     expect(tokenDeclarations.get('--apibox-focus')).toContain('--vscode-focusBorder');
+    expect(tokenDeclarations.get('--apibox-fg-icon')).toContain('--vscode-icon-foreground');
+    expect(tokenDeclarations.get('--apibox-bg-toolbar-hover')).toContain(
+      '--vscode-toolbar-hoverBackground',
+    );
+    expect(tokenDeclarations.get('--apibox-border-strong')).toContain('--vscode-widget-border');
+    expect(tokenDeclarations.get('--apibox-border-active')).toContain(
+      '--vscode-contrastActiveBorder',
+    );
+    expect(tokenDeclarations.get('--apibox-shadow-widget')).toContain('--vscode-widget-shadow');
+    expect(tokenDeclarations.get('--apibox-warning')).toContain(
+      '--vscode-editorWarning-foreground',
+    );
+    expect(tokenDeclarations.get('--apibox-danger')).toContain('--vscode-editorError-foreground');
+    expect(tokenDeclarations.get('--apibox-info')).toContain('--vscode-editorInfo-foreground');
   });
 });
 
@@ -128,6 +151,7 @@ describe('contrast', () => {
   const themes = {
     dark: parseDeclarations(dark),
     light: parseDeclarations(light),
+    highContrast: parseDeclarations(highContrast),
   };
   const textTokens = TOKEN_GROUPS.flatMap((group) =>
     group.tokens.filter((token) => token.usage === 'text').map((token) => token.name),
@@ -157,6 +181,34 @@ describe('contrast', () => {
       }
 
       expect(failures).toEqual([]);
+    });
+
+    it(`keeps form-field boundaries visible in the ${themeName} theme`, () => {
+      const field = resolveToken('--apibox-bg-input', tokenDeclarations, theme);
+      const boundary = resolveToken('--apibox-border-input', tokenDeclarations, theme);
+      if (!field || !boundary) throw new Error(`${themeName} form-field tokens did not resolve.`);
+      expect(contrastRatio(boundary, field)).toBeGreaterThanOrEqual(3);
+    });
+
+    it(`keeps adjacent surface roles distinct in the ${themeName} theme`, () => {
+      if (themeName === 'highContrast') {
+        expect(resolveToken('--apibox-border-contrast', tokenDeclarations, theme)).not.toBe(
+          'transparent',
+        );
+        return;
+      }
+      const pairs = [
+        ['--apibox-bg', '--apibox-bg-raised'],
+        ['--apibox-bg', '--apibox-bg-sunken'],
+        ['--apibox-bg-sunken', '--apibox-bg-input'],
+        ['--apibox-bg-raised', '--apibox-bg-code'],
+      ] as const;
+
+      for (const [left, right] of pairs) {
+        expect(resolveToken(left, tokenDeclarations, theme)).not.toBe(
+          resolveToken(right, tokenDeclarations, theme),
+        );
+      }
     });
   }
 });

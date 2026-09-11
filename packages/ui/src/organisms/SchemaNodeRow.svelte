@@ -70,23 +70,25 @@
   {#if !hideSelf}
     <div class="line">
       {#if expandable}
-        <Button
-          size="small"
-          testId="{testId}-toggle"
-          pressed={expanded}
-          label={expanded ? 'Collapse' : 'Expand'}
-          onclick={() => {
-            expansionOverride = !expanded;
-          }}
-        >
-          <Icon
-            name={expanded ? 'chevron-down' : 'chevron-right'}
-            size={13}
-            testId="{testId}-toggle-icon"
-          />
-        </Button>
+        <span class="disclosure">
+          <Button
+            size="small"
+            testId="{testId}-toggle"
+            pressed={expanded}
+            label={expanded ? 'Collapse' : 'Expand'}
+            onclick={() => {
+              expansionOverride = !expanded;
+            }}
+          >
+            <Icon
+              name={expanded ? 'chevron-down' : 'chevron-right'}
+              size={13}
+              testId="{testId}-toggle-icon"
+            />
+          </Button>
+        </span>
       {:else}
-        <span class="spacer" aria-hidden="true"></span>
+        <span class="disclosure spacer" aria-hidden="true"></span>
       {/if}
 
       <div class="body">
@@ -146,9 +148,14 @@
     align-items: flex-start;
   }
 
+  .disclosure {
+    display: flex;
+    flex: none;
+    padding-top: var(--apibox-space-3);
+  }
+
   .spacer {
     /* Keeps rows without a toggle aligned with rows that have one. */
-    flex: none;
     width: 21px;
   }
 

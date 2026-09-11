@@ -37,6 +37,7 @@ export const TOKEN_GROUPS: TokenGroup[] = [
       surface('--apibox-bg-raised'),
       surface('--apibox-bg-input'),
       surface('--apibox-bg-hover'),
+      surface('--apibox-bg-toolbar-hover'),
       surface('--apibox-bg-active'),
       surface('--apibox-bg-code'),
     ],
@@ -47,6 +48,7 @@ export const TOKEN_GROUPS: TokenGroup[] = [
     tokens: [
       text('--apibox-fg'),
       text('--apibox-fg-muted'),
+      text('--apibox-fg-icon'),
       // Rendered on an accent or selection fill, not on the page surface, so it is checked
       // against those instead of against `--apibox-bg`.
       surface('--apibox-fg-on-accent'),
@@ -60,6 +62,9 @@ export const TOKEN_GROUPS: TokenGroup[] = [
       line('--apibox-border'),
       line('--apibox-border-strong'),
       line('--apibox-border-input'),
+      line('--apibox-border-contrast'),
+      line('--apibox-border-active'),
+      surface('--apibox-shadow-widget'),
     ],
   },
   {
@@ -113,8 +118,15 @@ export const TOKEN_GROUPS: TokenGroup[] = [
   },
 ];
 
-/** Surfaces that text tokens must remain legible against. */
-export const TEXT_SURFACES = ['--apibox-bg', '--apibox-bg-sunken'];
+/** Surfaces that semantic text can appear against in documentation and workspace chrome. */
+export const TEXT_SURFACES = [
+  '--apibox-bg',
+  '--apibox-bg-sunken',
+  '--apibox-bg-raised',
+  '--apibox-bg-input',
+  '--apibox-bg-hover',
+  '--apibox-bg-code',
+];
 
 export const SPACING_TOKENS = [
   '--apibox-space-1',

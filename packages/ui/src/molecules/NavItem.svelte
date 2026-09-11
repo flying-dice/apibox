@@ -89,6 +89,12 @@
     background: var(--apibox-bg-active);
   }
 
+  .item:hover,
+  .current {
+    outline: 1px dashed var(--apibox-border-active);
+    outline-offset: -1px;
+  }
+
   .label {
     overflow: hidden;
     text-overflow: ellipsis;

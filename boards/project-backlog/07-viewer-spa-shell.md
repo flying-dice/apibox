@@ -5,7 +5,7 @@ priority: high
 package: viewer
 agent: codex
 live: false
-updatedAt: 2026-09-10T17:50:06.000Z
+updatedAt: 2026-09-11T00:10:05.000Z
 ---
 # Viewer SPA shell
 
@@ -28,7 +28,16 @@ webview with no server. See decisions/03-cli-ships-a-prebuilt-shell.md.
       not implement `var()` substitution.
 - [x] SSR render and hydration coverage for the component library
 
+## Gates
+
+- [x] tests-passing — typecheck and lint are clean; 247 unit tests and 21 Playwright
+      scenarios pass (268 total).
+- [x] clean-code-review — zero `TODO: clean-code` markers above 0.5 and no diff
+      whitespace errors.
+
 ## Comments
 
 - **codex** (2026-09-10T16:58:00.000Z): Claimed the shared viewer shell after the OpenAPI renderer entered Review. Starting with the package boundary and existing decisions so the browser and VS Code builds share one application rather than growing separate UI paths.
 - **codex** (2026-09-10T17:50:06.000Z): Moved to Review. The shared `DataSource` contract lives in `packages/viewer/src/data-source.ts`; static and correlated, runtime-validated webview implementations share the same manifest and document model. Hash routing, search, recursive sidebar navigation and scroll-spy are wired through `App.svelte`. Both `dist/` and stable-named CSP-safe `dist-webview/` builds pass. The full Review gate is green: typecheck, lint, 73 core + 132 UI + 16 viewer tests (221 total), zero clean-code markers above 0.5, and an independent boundary re-check found no remaining issue above 0.5. Live-browser verification produced dark `#ccc` on `#1f1f1f`, light `#3b3b3b` on `#fff`, and the webview fixture propagated VS Code `#123456`/`#f0e0d0` variables exactly; SSR and client hydration are covered in `packages/viewer/src/ssr.test.ts`.
+- **codex** (2026-09-11T00:08:00.000Z): Reopened the shell card after desktop screenshots showed the navigation and on-page surfaces ending at their content height in packages/ui/src/templates/DocLayout.svelte:37-58. Making both rails fill the viewport with independent overflow while preserving the stacked mobile layout, then adding browser geometry coverage.
+- **codex** (2026-09-11T00:10:05.000Z): Returned to Review. The shared layout now uses the dynamic viewport height for its minimum canvas and both sticky rails at packages/ui/src/templates/DocLayout.svelte:27-50, while the narrow layout explicitly restores content height at lines 75-88. The browser regression at tests/e2e/viewer.spec.ts:15-27 measures both rails at 1440×900 and requires each to begin at y=0 and equal the 900px viewport. A 1440×1000 production-preview capture visually confirmed continuous navigation surfaces to the bottom edge. Typecheck, lint, 247 unit tests and 21 Playwright scenarios pass; the clean-code marker and whitespace gates are clean.

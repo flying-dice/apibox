@@ -1,6 +1,6 @@
 # apibox — status
 
-**Updated:** 2026-09-10 21:38 UTC · **Branch:** `main` · **Working tree:** VS Code navigation fix verified
+**Updated:** 2026-09-11 00:27 UTC · **Branch:** `main` · **Working tree:** native VS Code theme parity verified
 
 ## Goal / health
 
@@ -11,12 +11,26 @@ OpenAPI, AsyncAPI and JSON-RPC. See `docs/01-overview.md`.
 **Health: all 14 cards are in Review.** `@apibox/core` parses all three formats.
 The UI foundations, OpenAPI renderer, shared browser/VS Code viewer shell, static-site CLI
 and extension are implementation-complete. The exact review gate passes clean typecheck,
-lint, 243 unit tests and 20 Playwright tests (263 total), with the browser suite rebuilding
+lint, 251 unit tests and 22 Playwright tests (273 total), with the browser suite rebuilding
 every workspace and exercising the CLI-generated static site. The VSIX also packages
 cleanly. Every runnable workspace surface has a documented development mode. The
 Antigravity review gate was removed at the user's direction.
 
 ## Now
+
+Card [03](boards/project-backlog/03-ui-tokens-and-storybook.md) is back in **Review** with
+the native VS Code roles and high-contrast behavior from Open Domain Specification brought
+into APIBox's shared semantic adapter. The extension bundle contains the native mappings and
+excludes standalone theme selectors.
+
+Card [07](boards/project-backlog/07-viewer-spa-shell.md) is back in **Review**. Desktop
+navigation and on-page rails now fill the dynamic viewport with independent scrolling,
+while the mobile stacked layout remains content-height. Browser geometry coverage measures
+both rails against the configured viewport.
+
+Card [05](boards/project-backlog/05-ui-schema-viewer.md) is back in **Review**. Schema tree
+disclosure controls now share the property row's top inset, and browser geometry coverage
+keeps each chevron centred on its label in both expanded and collapsed states.
 
 Card [14](boards/project-backlog/14-browser-workspaces-and-pwa.md) is in **Review**.
 GitHub Pages is a local-first installable PWA with versioned IndexedDB workspaces,
@@ -57,7 +71,7 @@ every browser-facing workflow and all three supported formats through real CLI o
 
 ## Next
 
-Collect human review and monitor the publication pipelines.
+Collect human review/sign-off for the completed cards.
 
 ## Later
 
@@ -81,10 +95,10 @@ Collect human review and monitor the publication pipelines.
 - Six decisions recorded in `decisions/`.
 - UI foundations, Storybook, atoms, molecules, SchemaViewer, all three renderers and the
   shared viewer shell, static-site CLI and VS Code extension are implemented; workspace
-  verification is green at 263 standard-gate tests plus one real VS Code Extension Host
+  verification is green at 273 standard-gate tests plus one real VS Code Extension Host
   integration test; all workspace targets build, and the VSIX packages.
 - Full test-ID coverage is enforced from one shared policy at source and browser runtime;
-  CI runs the same 239 unit and 15 Playwright scenarios as the local review gate.
+  CI runs the same 251 unit and 22 Playwright scenarios as the local review gate.
 - Root release packaging is self-contained across workspace boundaries. A lifecycle-free
   archive installed in an isolated project and generated a valid site through its binary;
   Storybook, release-artifact and Pages workflows are in place.
@@ -93,6 +107,14 @@ Collect human review and monitor the publication pipelines.
 - VS Code section, document and home links no longer depend on the webview's suppressed anchor
   default. A real pointer click in a clean Extension Development Host changed the route from
   `#/petstore` to `#/petstore/listpets` and scrolled to the rendered operation.
+- Schema disclosure arrows are aligned with their property headers across standalone and
+  embedded bundles, with an expanded/collapsed geometry regression in Playwright.
+- The shipped dark/light palettes now use a deliberate surface ladder, quieter status fills
+  and distinct workspace inputs; all content-surface and form-boundary contrast checks pass.
+- Desktop navigation and on-page rails fill the dynamic viewport and scroll independently;
+  a browser geometry regression protects both surfaces while mobile remains content-height.
+- Native VS Code icon, toolbar, widget, contrast and diagnostic roles now flow through the
+  semantic adapter; high contrast has Storybook, token-resolution and browser coverage.
 
 **Unresolved:**
 

@@ -31,7 +31,7 @@
               {#if token.usage === 'text'}
                 <span
                   class="usage"
-                  title="Checked against WCAG AA in both themes"
+                  title="Checked against WCAG AA in every standalone theme"
                   data-testid="token-{token.name}-usage">text</span
                 >
               {/if}

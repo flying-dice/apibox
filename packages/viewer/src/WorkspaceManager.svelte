@@ -203,7 +203,7 @@
     color: var(--apibox-fg);
     text-align: left;
     cursor: pointer;
-    background: var(--apibox-bg);
+    background: var(--apibox-bg-raised);
     border: 1px solid var(--apibox-border-strong);
     border-radius: calc(var(--apibox-radius) + 2px);
   }
@@ -241,7 +241,7 @@
   }
 
   .chevron {
-    color: var(--apibox-fg-muted);
+    color: var(--apibox-fg-icon);
   }
 
   .workspace-menu {
@@ -255,7 +255,7 @@
     background: var(--apibox-bg-raised, var(--apibox-bg));
     border: 1px solid var(--apibox-border-strong);
     border-radius: var(--apibox-radius);
-    box-shadow: 0 12px 30px rgb(0 0 0 / 24%);
+    box-shadow: 0 12px 30px var(--apibox-shadow-widget);
   }
 
   .workspace-option,
@@ -275,6 +275,13 @@
   .workspace-option.active,
   .manage-link:hover {
     background: var(--apibox-bg-hover);
+  }
+
+  .workspace-option:hover,
+  .workspace-option.active,
+  .manage-link:hover {
+    outline: 1px dashed var(--apibox-border-active);
+    outline-offset: -1px;
   }
 
   .workspace-option.active span::before {

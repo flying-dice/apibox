@@ -87,7 +87,7 @@
 
   .secondary:hover:not(:disabled),
   .ghost:hover:not(:disabled) {
-    background: var(--apibox-bg-hover);
+    background: var(--apibox-bg-toolbar-hover);
   }
 
   .button:disabled {
@@ -97,5 +97,11 @@
 
   .button[aria-pressed='true'] {
     background: var(--apibox-bg-hover);
+  }
+
+  .button:hover:not(:disabled),
+  .button[aria-pressed='true'] {
+    outline: 1px dashed var(--apibox-border-active);
+    outline-offset: -1px;
   }
 </style>

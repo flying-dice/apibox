@@ -143,7 +143,7 @@
 </dialog>
 
 <style>
-  .manager { width: min(46rem, calc(100vw - 2rem)); padding: 0; color: var(--apibox-fg); background: var(--apibox-bg); border: 1px solid var(--apibox-border-strong); border-radius: calc(var(--apibox-radius) * 2); box-shadow: 0 24px 80px rgb(0 0 0 / 45%); }
+  .manager { width: min(46rem, calc(100vw - 2rem)); padding: 0; color: var(--apibox-fg); background: var(--apibox-bg-raised); border: 1px solid var(--apibox-border-strong); border-radius: calc(var(--apibox-radius) * 2); outline: 1px solid var(--apibox-border-contrast); outline-offset: -1px; box-shadow: 0 24px 80px var(--apibox-shadow-widget); }
   .manager::backdrop { background: rgb(0 0 0 / 58%); backdrop-filter: blur(3px); }
   .manager-head { display: flex; gap: var(--apibox-space-4); align-items: flex-start; justify-content: space-between; padding: var(--apibox-space-5); border-bottom: 1px solid var(--apibox-border); }
   .manager h2, .manager h3, .manager p { margin: 0; }
@@ -152,17 +152,19 @@
   .close { padding: var(--apibox-space-1) var(--apibox-space-2); color: var(--apibox-fg-muted); font-size: 1.5rem; cursor: pointer; background: transparent; border: 0; }
   .manager-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(15rem, 0.8fr); min-height: 24rem; }
   .workspace-list, .create-panel { display: grid; gap: var(--apibox-space-2); align-content: start; padding: var(--apibox-space-4); }
-  .workspace-list { border-right: 1px solid var(--apibox-border); }
-  .workspace-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--apibox-space-2); align-items: center; padding: var(--apibox-space-1); border: 1px solid var(--apibox-border); border-radius: var(--apibox-radius); }
-  .workspace-card.current { border-color: var(--apibox-accent); }
+  .workspace-list { background: var(--apibox-bg); border-right: 1px solid var(--apibox-border); }
+  .workspace-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--apibox-space-2); align-items: center; padding: var(--apibox-space-1); background: var(--apibox-bg-raised); border: 1px solid var(--apibox-border); border-radius: var(--apibox-radius); }
+  .workspace-card.current { background: color-mix(in srgb, var(--apibox-accent) 8%, var(--apibox-bg-raised)); border-color: var(--apibox-accent); }
+  .workspace-card.current { outline: 1px dashed var(--apibox-border-active); outline-offset: -1px; }
   .workspace-card-main { display: grid; gap: 0.15rem; min-width: 0; padding: var(--apibox-space-2); color: var(--apibox-fg); text-align: left; cursor: pointer; background: transparent; border: 0; }
   .workspace-card small { color: var(--apibox-fg-muted); }
   .delete, .delete-confirm button { color: var(--apibox-danger); cursor: pointer; background: transparent; border: 0; }
   .delete-confirm { display: flex; gap: var(--apibox-space-1); align-items: center; font-size: var(--apibox-font-size-sm); }
-  .create-panel { gap: var(--apibox-space-3); }
+  .create-panel { gap: var(--apibox-space-3); background: var(--apibox-bg-sunken); }
   .create-panel form { display: grid; gap: var(--apibox-space-2); }
   .create-panel label { color: var(--apibox-fg-muted); font-size: var(--apibox-font-size-sm); }
-  .create-panel input { min-width: 0; padding: var(--apibox-space-2); color: var(--apibox-fg); background: var(--apibox-bg-sunken); border: 1px solid var(--apibox-border-strong); border-radius: var(--apibox-radius); }
+  .create-panel input { min-width: 0; padding: var(--apibox-space-2); color: var(--apibox-fg); background: var(--apibox-bg-input); border: 1px solid var(--apibox-border-input); border-radius: var(--apibox-radius); }
+  .create-panel input:focus { border-color: var(--apibox-focus); }
   .create { padding: var(--apibox-space-2) var(--apibox-space-3); color: var(--apibox-fg-on-accent); cursor: pointer; background: var(--apibox-button-bg); border: 0; border-radius: var(--apibox-radius); }
   @media (width <= 38rem) { .manager-grid { grid-template-columns: 1fr; } .workspace-list { border-right: 0; border-bottom: 1px solid var(--apibox-border); } }
 </style>

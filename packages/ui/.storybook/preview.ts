@@ -2,9 +2,10 @@ import type { Preview } from '@storybook/svelte-vite';
 import '../src/tokens/index.css';
 import '../src/tokens/theme-dark.css';
 import '../src/tokens/theme-light.css';
+import '../src/tokens/theme-high-contrast.css';
 
 /**
- * Both themes are loaded and selected by the `data-apibox-theme` attribute on the root
+ * All standalone themes are loaded and selected by the `data-apibox-theme` attribute on the root
  * element — the same mechanism the static site uses, so what Storybook shows is what ships.
  *
  * Making the toggle a toolbar control rather than two separate stories is deliberate: the
@@ -21,6 +22,7 @@ const preview: Preview = {
         items: [
           { value: 'dark', title: 'Dark Modern', icon: 'moon' },
           { value: 'light', title: 'Light Modern', icon: 'sun' },
+          { value: 'high-contrast', title: 'High Contrast', icon: 'contrast' },
         ],
         dynamicTitle: true,
       },

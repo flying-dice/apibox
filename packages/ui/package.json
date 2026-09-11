@@ -7,7 +7,8 @@
     ".": "./src/index.ts",
     "./tokens.css": "./src/tokens/index.css",
     "./themes/dark.css": "./src/tokens/theme-dark.css",
-    "./themes/light.css": "./src/tokens/theme-light.css"
+    "./themes/light.css": "./src/tokens/theme-light.css",
+    "./themes/high-contrast.css": "./src/tokens/theme-high-contrast.css"
   },
   "scripts": {
     "build": "svelte-check --tsconfig ./tsconfig.json --threshold error",

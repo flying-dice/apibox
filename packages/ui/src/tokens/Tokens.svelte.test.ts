@@ -10,7 +10,7 @@ import {
 
 /**
  * The showcase is exercised here mainly so that a token added to `tokens.css` but forgotten
- * in the showcase is caught. A token nobody can see is a token nobody checks in both themes.
+ * in the showcase is caught. A token nobody can see is a token nobody checks in every theme.
  */
 describe('Tokens showcase', () => {
   it('renders a swatch for every token in the manifest', () => {
