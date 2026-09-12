@@ -402,7 +402,11 @@ function isRpcMethod(value: unknown): boolean {
         isString(example.name) &&
         hasOptionalStrings(example, ['description']) &&
         'params' in example &&
-        'result' in example,
+        // Either an inline result or an externally hosted one. Requiring `result`
+        // unconditionally rejects an externalValue-only example outright, because an
+        // absent `result` is dropped entirely by JSON serialisation -- the same trap
+        // `isExample` hit for OpenAPI.
+        ('result' in example || isString(example.resultExternalValue)),
     ) &&
     (value.result === undefined ||
       (isRecord(value.result) &&

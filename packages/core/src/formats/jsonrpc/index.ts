@@ -66,6 +66,7 @@ export async function parseJsonRpc(
     version: asString(info.version) ?? '0.0.0',
     summary: asString(info.summary),
     description: asString(info.description),
+    termsOfService: asString(info.termsOfService),
     contact: parseContact(info.contact),
     license: parseLicense(info.license),
     externalDocs: parseExternalDocs(dereferenced.externalDocs),
@@ -253,10 +254,15 @@ function parseExamples(raw: unknown, structure: RpcMethod['paramStructure']): Rp
     .filter((entry): entry is Record<string, unknown> => Boolean(entry))
     .map((entry) => {
       // Params are a list of named example values; collapse them to the shape a caller
-      // would actually send, so the example can be shown as a real JSON-RPC payload.
+      // would actually send, so the example can be shown as a real JSON-RPC payload. A
+      // param given only by `externalValue` (no inline `value`) has nowhere else to go in
+      // this collapsed shape, so its URL is surfaced as the placeholder value in that slot
+      // rather than silently dropped.
       const params = asArray(entry.params).map((param) => {
         const record = asRecord(param);
-        return record && 'value' in record ? record.value : param;
+        if (!record) return param;
+        if ('value' in record) return record.value;
+        return asString(record.externalValue) ?? param;
       });
       const paramNames = asArray(entry.params).map((param) => asString(asRecord(param)?.name));
       // The method's declared encoding is the authority. An example's items carry names
@@ -273,6 +279,10 @@ function parseExamples(raw: unknown, structure: RpcMethod['paramStructure']): Rp
           ? Object.fromEntries(paramNames.map((paramName, i) => [paramName as string, params[i]]))
           : params,
         result: result && 'value' in result ? result.value : undefined,
+        // Unlike params, the result is a single Example Object -- room enough to model
+        // `externalValue` properly, as its own field, rather than as a placeholder.
+        resultExternalValue:
+          result && !('value' in result) ? asString(result.externalValue) : undefined,
       } satisfies RpcExample;
     });
 }

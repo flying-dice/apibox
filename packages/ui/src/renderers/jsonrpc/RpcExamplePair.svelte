@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { RpcExample } from '@apibox/core';
+  import Link from '../../atoms/Link.svelte';
   import { formatJson } from '../../format-json.js';
   import CodeBlock from '../../molecules/CodeBlock.svelte';
 
@@ -26,15 +27,27 @@
     label="Request"
     testId="{testId}-request"
   />
-  <CodeBlock
-    code={formatJson(
-      { jsonrpc: '2.0', result: example.result, id: 1 },
-      'This value could not be serialized as JSON.',
-    )}
-    language="json"
-    label="Response"
-    testId="{testId}-response"
-  />
+  {#if example.resultExternalValue}
+    <!--
+      `externalValue` points at a URL rather than carrying the result inline. Rendered as
+      a link, never fetched -- same treatment as ExampleViewer's `externalValue` (OpenAPI).
+    -->
+    <p class="external" data-testid="{testId}-response-external-value">
+      <Link href={example.resultExternalValue} testId="{testId}-response-external-value-link">
+        {example.resultExternalValue}
+      </Link>
+    </p>
+  {:else}
+    <CodeBlock
+      code={formatJson(
+        { jsonrpc: '2.0', result: example.result, id: 1 },
+        'This value could not be serialized as JSON.',
+      )}
+      language="json"
+      label="Response"
+      testId="{testId}-response"
+    />
+  {/if}
 </div>
 
 <style>

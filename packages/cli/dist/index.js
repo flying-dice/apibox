@@ -671,6 +671,8 @@ async function parseAsyncApi(raw, options = {}) {
     url: safe(() => server.url()) ?? server.host?.() ?? "",
     description: server.description(),
     protocol: server.protocol(),
+    protocolVersion: server.hasProtocolVersion?.() ? safe(() => server.protocolVersion()) : undefined,
+    pathname: server.hasPathname?.() ? safe(() => server.pathname()) : undefined,
     variables: nonEmpty(safe(() => server.variables().all())?.map((variable) => ({
       name: variable.id(),
       default: variable.hasDefaultValue() ? variable.defaultValue() : undefined,
@@ -678,7 +680,9 @@ async function parseAsyncApi(raw, options = {}) {
       enum: variable.hasAllowedValues() ? variable.allowedValues() : undefined
     }))),
     security: toSecurityRequirements(safe(() => server.security()), securitySchemeNames),
-    bindings: toBindings(safe(() => server.bindings()))
+    bindings: toBindings(safe(() => server.bindings())),
+    tags: nonEmpty(safe(() => server.tags().all().map((tag) => tag.name()))),
+    extensions: parseExtensions(server)
   }));
   const tags = document.info().tags().all().map((tag) => ({
     name: tag.name(),
@@ -704,6 +708,10 @@ async function parseAsyncApi(raw, options = {}) {
       channelServers: channel ? nonEmpty(safe(() => channel.servers().all().map((server) => server.id()))) : undefined,
       bindings: toBindings(safe(() => operation.bindings())),
       channelBindings: channel ? toBindings(safe(() => channel.bindings())) : undefined,
+      channelTags: channel ? readChannelTags(channel) : undefined,
+      channelExternalDocs: channel ? readChannelExternalDocs(channel) : undefined,
+      extensions: parseExtensions(operation),
+      channelExtensions: channel ? parseExtensions(channel) : undefined,
       reply: reply ? {
         channelAddress: safe(() => reply.channel()?.address() ?? reply.channel()?.id()),
         addressLocation: safe(() => reply.address()?.location()),
@@ -720,7 +728,10 @@ async function parseAsyncApi(raw, options = {}) {
     description: safe(() => channel.description()),
     parameters: parseChannelParameters(channel),
     servers: nonEmpty(safe(() => channel.servers().all().map((server) => server.id()))),
-    bindings: toBindings(safe(() => channel.bindings()))
+    bindings: toBindings(safe(() => channel.bindings())),
+    tags: readChannelTags(channel),
+    externalDocs: readChannelExternalDocs(channel),
+    extensions: parseExtensions(channel)
   }));
   const schemas = document.components().schemas().all().map((schema) => normaliseAsyncApiSchema(schema.json(), {}, schema.id())).filter((node) => Boolean(node));
   const license = safe(() => info.license());
@@ -746,6 +757,8 @@ async function parseAsyncApi(raw, options = {}) {
     securitySchemes,
     defaultContentType: safe(() => document.defaultContentType()),
     orphanChannels,
+    applicationId: info.hasId() ? safe(() => info.id()) : undefined,
+    extensions: nonEmpty([...parseExtensions(document) ?? [], ...parseExtensions(info) ?? []]),
     nav: buildNav(operations, orphanChannels, schemas),
     warnings
   };
@@ -876,15 +889,37 @@ function readTitle(channel) {
   const titled = channel;
   return typeof titled.title === "function" ? titled.title() : undefined;
 }
+function readChannelTags(channel) {
+  const tagged = channel;
+  if (typeof tagged.tags !== "function")
+    return;
+  return nonEmpty(safe(() => tagged.tags?.().all())?.map((tag) => tag.name()));
+}
+function readChannelExternalDocs(channel) {
+  const documented = channel;
+  if (typeof documented.hasExternalDocs !== "function")
+    return;
+  return documented.hasExternalDocs() ? toExternalDocs(safe(() => documented.externalDocs?.())) : undefined;
+}
 function parseChannelParameters(channel) {
   const parameters = safe(() => channel.parameters().all()) ?? [];
   return parameters.map((parameter) => ({
     name: parameter.id(),
     in: "path",
-    description: safe(() => parameter.description()),
+    description: describeParameterLocation(parameter),
     required: true,
     schema: normaliseAsyncApiSchema(parameterSchema(parameter))
   }));
+}
+function describeParameterLocation(parameter) {
+  const description = safe(() => parameter.description());
+  const location = parameter.hasLocation?.() ? safe(() => parameter.location()) : undefined;
+  if (!location)
+    return description;
+  const note = `Located via: \`${location}\``;
+  return description ? `${description}
+
+${note}` : note;
 }
 function parameterSchema(parameter) {
   const nested = safe(() => parameter.schema?.()?.json());
@@ -916,7 +951,10 @@ function toMessageInfo(message, defaultContentType, defaultSchemaFormat, warning
       location: safe(() => correlationId.location()),
       description: safe(() => correlationId.description())
     } : undefined,
-    bindings: toBindings(safe(() => message.bindings()))
+    bindings: toBindings(safe(() => message.bindings())),
+    tags: nonEmpty(safe(() => message.tags().all().map((tag) => tag.name()))),
+    externalDocs: message.hasExternalDocs?.() ? toExternalDocs(safe(() => message.externalDocs())) : undefined,
+    extensions: parseExtensions(message)
   };
 }
 function normalisePayloadLike(schema, defaultSchemaFormat) {
@@ -935,6 +973,13 @@ function toExamples2(examples) {
     summary: safe(() => example.summary()),
     value: example.hasPayload?.() ? example.payload() : safe(() => example.headers()) ?? undefined
   }));
+}
+function parseExtensions(model) {
+  const list = safe(() => model?.extensions?.().all());
+  if (!list)
+    return;
+  const entries = list.filter((extension) => !PARSER_INJECTED_EXTENSION_KEYS.has(extension.id())).map((extension) => ({ key: extension.id(), value: extension.value() }));
+  return entries.length > 0 ? entries : undefined;
 }
 function toExternalDocs(docs) {
   if (!docs)
@@ -1072,6 +1117,7 @@ async function parseJsonRpc(raw, options = {}) {
     version: asString(info.version) ?? "0.0.0",
     summary: asString(info.summary),
     description: asString(info.description),
+    termsOfService: asString(info.termsOfService),
     contact: parseContact(info.contact),
     license: parseLicense(info.license),
     externalDocs: parseExternalDocs(dereferenced.externalDocs),
@@ -1081,10 +1127,10 @@ async function parseJsonRpc(raw, options = {}) {
     schemas,
     nav: buildNav2(methods, schemas),
     warnings,
-    extensions: parseExtensions(dereferenced)
+    extensions: parseExtensions2(dereferenced)
   };
 }
-function parseExtensions(record) {
+function parseExtensions2(record) {
   const entries = Object.entries(record).filter(([key]) => isExtensionKey(key));
   return entries.length > 0 ? entries.map(([key, value]) => ({ key, value })) : undefined;
 }
@@ -1156,7 +1202,7 @@ function parseMethods(root, names, tagInfoByName, warnings) {
       links: parseLinks(entry.links),
       servers: servers.length > 0 ? servers : undefined,
       externalDocs: parseExternalDocs(entry.externalDocs),
-      extensions: parseExtensions(entry)
+      extensions: parseExtensions2(entry)
     };
   });
 }
@@ -1203,7 +1249,11 @@ function parseExamples(raw, structure) {
   return asArray(raw).map((entry) => asRecord(entry)).filter((entry) => Boolean(entry)).map((entry) => {
     const params = asArray(entry.params).map((param) => {
       const record = asRecord(param);
-      return record && "value" in record ? record.value : param;
+      if (!record)
+        return param;
+      if ("value" in record)
+        return record.value;
+      return asString(record.externalValue) ?? param;
     });
     const paramNames = asArray(entry.params).map((param) => asString(asRecord(param)?.name));
     const named = structure === "by-position" ? false : structure === "by-name" || paramNames.every(Boolean);
@@ -1212,7 +1262,8 @@ function parseExamples(raw, structure) {
       name: asString(entry.name) ?? "Example",
       description: asString(entry.description) ?? asString(entry.summary),
       params: named ? Object.fromEntries(paramNames.map((paramName, i) => [paramName, params[i]])) : params,
-      result: result && "value" in result ? result.value : undefined
+      result: result && "value" in result ? result.value : undefined,
+      resultExternalValue: result && !("value" in result) ? asString(result.externalValue) : undefined
     };
   });
 }
@@ -1364,8 +1415,8 @@ async function parseOpenApi(raw, options = {}) {
   const webhooks = parseWebhooks(dereferenced, names, servers, warnings, taken);
   const schemas = parseComponentSchemas(dereferenced, names);
   const documentExtensions = [
-    ...parseExtensions2(dereferenced) ?? [],
-    ...parseExtensions2(info) ?? []
+    ...parseExtensions3(dereferenced) ?? [],
+    ...parseExtensions3(info) ?? []
   ];
   return {
     id: options.id ?? slugify(title),
@@ -1392,7 +1443,7 @@ async function parseOpenApi(raw, options = {}) {
     extensions: documentExtensions.length > 0 ? documentExtensions : undefined
   };
 }
-function parseExtensions2(record) {
+function parseExtensions3(record) {
   const entries = Object.entries(record).filter(([key]) => isExtensionKey(key));
   return entries.length > 0 ? entries.map(([key, value]) => ({ key, value })) : undefined;
 }
@@ -1403,7 +1454,7 @@ function parseTags(raw) {
     externalDocs: parseExternalDocs(entry.externalDocs),
     parent: asString(entry.parent),
     kind: asString(entry.kind),
-    extensions: parseExtensions2(entry)
+    extensions: parseExtensions3(entry)
   }));
 }
 function parseServers2(raw) {
@@ -1423,7 +1474,7 @@ function parseServers2(raw) {
           enum: asArray(v.enum).filter((e) => typeof e === "string")
         };
       }) : undefined,
-      extensions: parseExtensions2(entry)
+      extensions: parseExtensions3(entry)
     };
   });
 }
@@ -1534,7 +1585,7 @@ function parsePathItemOperations(pathItem, names, documentServers, warnings, pat
       responses: parseResponses(operationValue.responses, names),
       security: parseSecurity(operationValue.security),
       callbacks: options.parseCallbacks ? parseCallbacks(operationValue.callbacks, names, warnings, taken) : undefined,
-      extensions: parseExtensions2(operationValue)
+      extensions: parseExtensions3(operationValue)
     };
   };
   for (const method of METHODS) {

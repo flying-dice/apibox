@@ -1,9 +1,13 @@
 ---
-column: backlog
+column: review
 labels: [core, ui, asyncapi]
 priority: med
 package: core
-updatedAt: 2026-09-12T06:15:00.000Z
+agent: claude
+live: false
+status: Metadata, extensions and orphan servers landed
+progress: 100
+updatedAt: 2026-09-12T07:50:00.000Z
 ---
 # AsyncAPI: remaining metadata, extensions and the orphan-channel servers
 
@@ -35,8 +39,12 @@ traits that no operation references are still invisible.
 
 ## Checklist
 
-- [ ] Capture and render authored `x-*` extensions, mirroring the OpenRPC shape
-- [ ] Render orphan-channel `servers`
-- [ ] Read and render the seven typed-but-unused fields
-- [ ] Decide on channel `tags`/`externalDocs` and record the reasoning either way
-- [ ] Decide whether component catalogues earn a browsable section
+- [x] Capture and render authored `x-*` extensions, mirroring the OpenRPC shape
+- [x] Render orphan-channel `servers`
+- [x] Read and render the seven typed-but-unused fields
+- [x] Decide on channel `tags`/`externalDocs` and record the reasoning either way
+- [x] Decide whether component catalogues earn a browsable section
+
+- **claude** (2026-09-12T09:00:00.000Z): Both implementing agents were killed mid-run by a session limit, but the implementation was finished — they died during verification, not while writing code. Confirmed by auditing the work against the checklist rather than assuming either way, then verifying in a browser.
+- **claude** (2026-09-12T09:00:00.000Z): One real bug was left behind and fixed by Lead. `validate.ts` required `result in example` for every OpenRPC example, which rejects an `externalValue`-only example outright, because an absent `result` is dropped entirely by JSON serialisation. The whole wallet document failed `isApiDocument`, so the viewer rendered "not a valid normalized API document" and three e2e tests failed with "element(s) not found". This is the identical trap card 38 hit with `isExample` for OpenAPI — the same mistake, in the same file, a day apart. `RpcExample.result` is now optional, matching its own doc comment that calls it mutually exclusive with `resultExternalValue`.
+- **claude** (2026-09-12T09:00:00.000Z): Verified — typecheck 10x "0 ERRORS", lint clean over 142 files, core 181 to 183, ui 197 to 201, cli 7, extension 17, viewer 20, e2e 28. In a real browser both documents render with no page errors: OpenRPC shows terms of service, tag descriptions and the externally hosted example; AsyncAPI shows six authored `x-` extension chips with zero `x-parser` leakage, confirming card 36's filter and the new authored-extension capture coexist.

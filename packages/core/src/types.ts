@@ -208,6 +208,14 @@ export interface ServerInfo {
   description?: string;
   /** AsyncAPI only. */
   protocol?: string;
+  /** AsyncAPI 3.0 only: the protocol's own version, e.g. `"3.1.1"` for an MQTT broker. */
+  protocolVersion?: string;
+  /**
+   * AsyncAPI 3.0 only: a path appended to `host` (RFC 6570), for protocols where the server
+   * itself has a base path distinct from a channel's own address, e.g. a WebSocket server
+   * reachable at `/mqtt` on its host.
+   */
+  pathname?: string;
   variables?: Array<{
     name: string;
     default?: string;
@@ -223,9 +231,13 @@ export interface ServerInfo {
   security?: SecurityRequirement[];
   /** AsyncAPI only: protocol bindings declared directly on this server. */
   bindings?: BindingInfo[];
+  /** AsyncAPI 3.0 only: tag names declared directly on this Server Object. */
+  tags?: string[];
   /**
-   * OpenAPI only: `x-*` specification extensions found directly on this Server Object, in
-   * declaration order. Same shape and rendering philosophy as {@link SchemaNode.extensions}.
+   * `x-*` specification extensions found directly on this Server Object, in declaration
+   * order. Same shape and rendering philosophy as {@link SchemaNode.extensions} -- shared by
+   * OpenAPI and AsyncAPI, both of which type an `extensions()`/`x-*` accessor on their own
+   * Server Object.
    */
   extensions?: Array<{ key: string; value: unknown }>;
 }
@@ -628,6 +640,11 @@ export interface MessageInfo {
   headersSchemaFormat?: string;
   /** Protocol bindings declared on this message. */
   bindings?: BindingInfo[];
+  /** Tag names declared directly on this Message Object. */
+  tags?: string[];
+  externalDocs?: ExternalDocs;
+  /** `x-*` specification extensions found directly on this Message Object, in declaration order. */
+  extensions?: Array<{ key: string; value: unknown }>;
 }
 
 /**
@@ -664,6 +681,19 @@ export interface ChannelOperation {
   bindings?: BindingInfo[];
   /** Protocol bindings declared on the operation's channel. */
   channelBindings?: BindingInfo[];
+  /**
+   * Tag names declared directly on the channel's Channel Object -- distinct from {@link tags},
+   * which are the operation's own. AsyncAPI 3.0 only: `ChannelInterface` does not type this
+   * accessor (see {@link ChannelInfo.tags}'s doc comment for why it is read anyway), and 2.x
+   * channels have no such concept at all.
+   */
+  channelTags?: string[];
+  /** As {@link channelTags}, the channel's own `externalDocs` rather than the operation's. */
+  channelExternalDocs?: ExternalDocs;
+  /** `x-*` specification extensions found directly on the Operation Object, in declaration order. */
+  extensions?: Array<{ key: string; value: unknown }>;
+  /** As {@link extensions}, but the channel's own -- mirrors {@link channelBindings}/{@link channelServers}. */
+  channelExtensions?: Array<{ key: string; value: unknown }>;
 }
 
 /**
@@ -681,6 +711,21 @@ export interface ChannelInfo {
   servers?: string[];
   /** Protocol bindings declared on this channel. */
   bindings?: BindingInfo[];
+  /**
+   * AsyncAPI 3.0 only: tag names declared directly on this Channel Object.
+   *
+   * `ChannelInterface`'s typed extends list omits `TagsMixinInterface` (unlike
+   * `externalDocs`'s own mixin -- see {@link externalDocs} -- both are still missing), even
+   * though the concrete 3.x `Channel` class answers `tags()` at runtime via `CoreModel`
+   * (`@asyncapi/parser`'s `cjs/models/v3/mixins.js`). Read the same way `title` already is
+   * (see `readTitle` in the AsyncAPI parser), guarded by `typeof === 'function'` so a 2.x
+   * channel -- which has neither concept -- yields `undefined` rather than throwing.
+   */
+  tags?: string[];
+  /** As {@link tags}: read past the typed model the same way, for the same reason. */
+  externalDocs?: ExternalDocs;
+  /** `x-*` specification extensions found directly on this Channel Object, in declaration order. */
+  extensions?: Array<{ key: string; value: unknown }>;
 }
 
 export interface AsyncApiDocument extends ApiDocumentBase {
@@ -692,6 +737,19 @@ export interface AsyncApiDocument extends ApiDocumentBase {
   /** `defaultContentType`: the content type messages fall back to when they declare none. */
   defaultContentType?: string;
   orphanChannels: ChannelInfo[];
+  /**
+   * AsyncAPI 3.0's root `id`: the application's own URI, e.g. `urn:example:com:streetlights`.
+   * Named `applicationId` rather than `id` -- {@link ApiDocumentBase.id} is already taken by
+   * apibox's own internal slug, which is a wholly different thing from this spec field.
+   */
+  applicationId?: string;
+  /**
+   * `x-*` specification extensions found at the document root or on `info` (AsyncAPI has
+   * separate root and `info` objects, unlike OpenAPI, but both are folded into one list here
+   * the same way OpenAPI folds its own root+info extensions -- a reader does not need to know
+   * which of the two objects an extension happened to be attached to).
+   */
+  extensions?: Array<{ key: string; value: unknown }>;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -717,7 +775,16 @@ export interface RpcExample {
   name: string;
   description?: string;
   params: unknown;
-  result: unknown;
+  /** Absent when the example carries `resultExternalValue` instead. */
+  result?: unknown;
+  /**
+   * The result Example Object's `externalValue`, when it carries a URL instead of an
+   * inline `value`. Mirrors `ExampleValue.externalValue` (OpenAPI) -- mutually exclusive
+   * with `result`, rendered as a link, never fetched. Params keep the request-shape
+   * collapse (see `parseExamples`), so an externalValue on a param is surfaced inline as
+   * a string placeholder there rather than as a second field per param.
+   */
+  resultExternalValue?: string;
 }
 
 /**

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { AsyncApiDocument as AsyncApiDocumentModel } from '@apibox/core';
   import Badge from '../../atoms/Badge.svelte';
+  import Chip from '../../atoms/Chip.svelte';
   import Link from '../../atoms/Link.svelte';
   import BindingList from '../../organisms/BindingList.svelte';
   import DocumentHeader from '../../organisms/DocumentHeader.svelte';
@@ -23,6 +24,24 @@
 
 <article class="document" data-testid={testId}>
   <DocumentHeader {document} specVersion={document.specVersion} testId="{testId}-header" />
+  {#if document.applicationId}
+    <p class="application-id" data-testid="{testId}-application-id">
+      Application id: <code>{document.applicationId}</code>
+    </p>
+  {/if}
+  {#if document.extensions?.length}
+    <!-- Root/info-level `x-*` extensions, chipped the same way OpenApiDocument shows its own. -->
+    <div class="extensions" data-testid="{testId}-extensions">
+      {#each document.extensions as extension (extension.key)}
+        <Chip
+          label={extension.key}
+          value={typeof extension.value === 'string' ? extension.value : JSON.stringify(extension.value)}
+          code
+          testId="{testId}-extension-{extension.key}"
+        />
+      {/each}
+    </div>
+  {/if}
   <ServerList servers={document.servers} testId="{testId}-servers" />
   <SecuritySchemes schemes={document.securitySchemes} testId="{testId}-security" />
 
@@ -70,8 +89,39 @@
           {#if channel.description}
             <p data-testid="{testId}-channel-{index}-description">{channel.description}</p>
           {/if}
+          {#if channel.servers?.length}
+            <p class="servers" data-testid="{testId}-channel-{index}-servers">
+              Available on: {channel.servers.join(', ')}
+            </p>
+          {/if}
+          {#if channel.tags?.length}
+            <div class="tags" data-testid="{testId}-channel-{index}-tags">
+              {#each channel.tags as tag, tagIndex (tagIndex)}
+                <Badge tone="neutral" variant="outline" small testId="{testId}-channel-{index}-tag-{tagIndex}">
+                  {tag}
+                </Badge>
+              {/each}
+            </div>
+          {/if}
+          {#if channel.externalDocs}
+            <Link href={channel.externalDocs.url} testId="{testId}-channel-{index}-external-docs">
+              {channel.externalDocs.description ?? 'Docs'}
+            </Link>
+          {/if}
           <ParameterTable parameters={channel.parameters} testId="{testId}-channel-{index}-parameters" />
           <BindingList bindings={channel.bindings} testId="{testId}-channel-{index}-bindings" label="Channel" />
+          {#if channel.extensions?.length}
+            <div class="extensions" data-testid="{testId}-channel-{index}-extensions">
+              {#each channel.extensions as extension (extension.key)}
+                <Chip
+                  label={extension.key}
+                  value={typeof extension.value === 'string' ? extension.value : JSON.stringify(extension.value)}
+                  code
+                  testId="{testId}-channel-{index}-extension-{extension.key}"
+                />
+              {/each}
+            </div>
+          {/if}
         </article>
       {/each}
     </section>
@@ -152,5 +202,21 @@
   .channel code {
     font-family: var(--apibox-font-code);
     color: var(--apibox-fg-muted);
+  }
+
+  .application-id {
+    margin: 0;
+    color: var(--apibox-fg-muted);
+  }
+
+  .application-id code {
+    font-family: var(--apibox-font-code);
+  }
+
+  .extensions,
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--apibox-space-2);
   }
 </style>

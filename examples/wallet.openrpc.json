@@ -5,7 +5,8 @@
     "title": "Wallet RPC",
     "version": "2.1.0",
     "summary": "Query balances and send transfers over JSON-RPC.",
-    "description": "A JSON-RPC 2.0 interface for querying balances and sending transfers."
+    "description": "A JSON-RPC 2.0 interface for querying balances and sending transfers.",
+    "termsOfService": "https://example.com/wallet-rpc-terms"
   },
   "externalDocs": {
     "description": "Full API guide",
@@ -34,7 +35,9 @@
         {
           "name": "accounts",
           "description": "Methods for inspecting account state.",
-          "externalDocs": { "url": "https://docs.example.com/accounts" }
+          "externalDocs": {
+            "url": "https://docs.example.com/accounts"
+          }
         }
       ],
       "params": [
@@ -53,7 +56,15 @@
           "description": "Block height, or the string 'latest'.",
           "required": false,
           "schema": {
-            "oneOf": [{ "type": "integer" }, { "type": "string", "enum": ["latest", "pending"] }]
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string",
+                "enum": ["latest", "pending"]
+              }
+            ]
           }
         },
         {
@@ -61,20 +72,51 @@
           "description": "Return the balance as a hex string instead of decimal.",
           "required": false,
           "deprecated": true,
-          "schema": { "type": "boolean" }
+          "schema": {
+            "type": "boolean"
+          }
         }
       ],
       "result": {
         "name": "balance",
         "description": "The balance in the smallest unit.",
-        "schema": { "type": "string", "pattern": "^[0-9]+$" }
+        "schema": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        }
       },
-      "errors": [{ "code": -32001, "message": "Unknown account" }],
+      "errors": [
+        {
+          "code": -32001,
+          "message": "Unknown account"
+        }
+      ],
       "examples": [
         {
           "name": "A funded account",
-          "params": [{ "name": "address", "value": "0x0000000000000000000000000000000000000001" }],
-          "result": { "name": "balance", "value": "1250000000000000000" }
+          "params": [
+            {
+              "name": "address",
+              "value": "0x0000000000000000000000000000000000000001"
+            }
+          ],
+          "result": {
+            "name": "balance",
+            "value": "1250000000000000000"
+          }
+        },
+        {
+          "name": "A remotely hosted example",
+          "params": [
+            {
+              "name": "address",
+              "externalValue": "https://example.com/examples/address.json"
+            }
+          ],
+          "result": {
+            "name": "balance",
+            "externalValue": "https://example.com/examples/balance.json"
+          }
         }
       ],
       "links": [
@@ -93,8 +135,14 @@
       "name": "sendTransfer",
       "summary": "Send a transfer",
       "description": "Submits a signed transfer to the network and returns its hash.",
-      "tags": [{ "name": "transfers" }],
-      "externalDocs": { "url": "https://docs.example.com/sendTransfer" },
+      "tags": [
+        {
+          "name": "transfers"
+        }
+      ],
+      "externalDocs": {
+        "url": "https://docs.example.com/sendTransfer"
+      },
       "servers": [
         {
           "name": "relay",
@@ -106,27 +154,47 @@
         {
           "name": "transaction",
           "required": true,
-          "schema": { "$ref": "#/components/schemas/Transaction" }
+          "schema": {
+            "$ref": "#/components/schemas/Transaction"
+          }
         }
       ],
       "result": {
         "name": "hash",
         "description": "The transaction hash. Superseded by `transactionHash` on the relay server.",
-        "schema": { "type": "string", "description": "The transaction hash." },
+        "schema": {
+          "type": "string",
+          "description": "The transaction hash."
+        },
         "deprecated": true
       },
       "errors": [
-        { "code": -32002, "message": "Insufficient funds" },
-        { "code": -32003, "message": "Invalid signature" }
+        {
+          "code": -32002,
+          "message": "Insufficient funds"
+        },
+        {
+          "code": -32003,
+          "message": "Invalid signature"
+        }
       ]
     },
     {
       "name": "subscribeBlocks",
       "summary": "Subscribe to new blocks",
       "description": "Opens a subscription that emits a notification for every new block.",
-      "tags": [{ "name": "subscriptions" }],
+      "tags": [
+        {
+          "name": "subscriptions"
+        }
+      ],
       "params": [],
-      "result": { "name": "subscriptionId", "schema": { "type": "string" } }
+      "result": {
+        "name": "subscriptionId",
+        "schema": {
+          "type": "string"
+        }
+      }
     }
   ],
   "components": {
@@ -136,11 +204,26 @@
         "description": "A signed transfer.",
         "required": ["from", "to", "value", "signature"],
         "properties": {
-          "from": { "type": "string", "description": "Sender address." },
-          "to": { "type": "string", "description": "Recipient address." },
-          "value": { "type": "string", "description": "Amount in the smallest unit." },
-          "signature": { "type": "string", "description": "Hex-encoded signature." },
-          "memo": { "type": "string", "maxLength": 128 }
+          "from": {
+            "type": "string",
+            "description": "Sender address."
+          },
+          "to": {
+            "type": "string",
+            "description": "Recipient address."
+          },
+          "value": {
+            "type": "string",
+            "description": "Amount in the smallest unit."
+          },
+          "signature": {
+            "type": "string",
+            "description": "Hex-encoded signature."
+          },
+          "memo": {
+            "type": "string",
+            "maxLength": 128
+          }
         }
       }
     }

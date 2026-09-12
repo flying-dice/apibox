@@ -2154,6 +2154,27 @@ describe('JSON-RPC', () => {
     expect(doc.extensions).toEqual([{ key: 'x-internal-id', value: 'wallet-rpc' }]);
   });
 
+  it('parses info.termsOfService, same as AsyncAPI already does', async () => {
+    const doc = await load();
+    expect(doc.termsOfService).toBe('https://example.com/wallet-rpc-terms');
+  });
+
+  it("reads an Example Object's externalValue for both a param and the result", async () => {
+    const doc = await load();
+    const example = doc.methods
+      .find((m) => m.name === 'getBalance')
+      ?.examples.find((e) => e.name === 'A remotely hosted example');
+
+    // Params are collapsed into the request shape a caller would send; a param given only
+    // by externalValue has nowhere else to go there, so its URL is surfaced as the
+    // placeholder value at that slot rather than silently dropped.
+    expect(example?.params).toEqual({ address: 'https://example.com/examples/address.json' });
+    // The result is a single Example Object -- room enough to model externalValue as its
+    // own field, distinct from an inline value.
+    expect(example?.result).toBeUndefined();
+    expect(example?.resultExternalValue).toBe('https://example.com/examples/balance.json');
+  });
+
   it('parses server variables from the map form of the Server Object', async () => {
     const doc = await load();
     const server = doc.servers[0];

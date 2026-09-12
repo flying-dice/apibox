@@ -1,5 +1,8 @@
 <script lang="ts">
   import type { MessageInfo } from '@apibox/core';
+  import Badge from '../../atoms/Badge.svelte';
+  import Chip from '../../atoms/Chip.svelte';
+  import Link from '../../atoms/Link.svelte';
   import BindingList from '../../organisms/BindingList.svelte';
   import ExampleViewer from '../../organisms/ExampleViewer.svelte';
   import SchemaViewer from '../../organisms/SchemaViewer.svelte';
@@ -17,6 +20,18 @@
   {#if message.summary}<p data-testid="{testId}-summary">{message.summary}</p>{/if}
   {#if message.contentType}
     <code data-testid="{testId}-content-type">{message.contentType}</code>
+  {/if}
+  {#if message.tags?.length}
+    <div class="tags" data-testid="{testId}-tags">
+      {#each message.tags as tag, index (tag)}
+        <Badge tone="neutral" variant="outline" small testId="{testId}-tag-{index}">{tag}</Badge>
+      {/each}
+    </div>
+  {/if}
+  {#if message.externalDocs}
+    <Link href={message.externalDocs.url} testId="{testId}-external-docs">
+      {message.externalDocs.description ?? 'Docs'}
+    </Link>
   {/if}
   {#if message.correlationId}
     <p class="correlation" data-testid="{testId}-correlation-id">
@@ -44,6 +59,18 @@
     <ExampleViewer examples={message.examples} testId="{testId}-examples" />
   {/if}
   <BindingList bindings={message.bindings} testId="{testId}-bindings" label="Message" />
+  {#if message.extensions?.length}
+    <div class="extensions" data-testid="{testId}-extensions">
+      {#each message.extensions as extension (extension.key)}
+        <Chip
+          label={extension.key}
+          value={typeof extension.value === 'string' ? extension.value : JSON.stringify(extension.value)}
+          code
+          testId="{testId}-extension-{extension.key}"
+        />
+      {/each}
+    </div>
+  {/if}
 </section>
 
 <style>
@@ -71,5 +98,12 @@
   .correlation,
   .non-schema {
     color: var(--apibox-fg-muted);
+  }
+
+  .tags,
+  .extensions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--apibox-space-2);
   }
 </style>

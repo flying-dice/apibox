@@ -1,5 +1,8 @@
 asyncapi: 3.0.0
+id: 'urn:example:com:streetlights'
+x-internal-build: nightly
 info:
+  x-support-channel: '#streetlights'
   title: Streetlights
   version: 1.0.0
   description: |
@@ -24,7 +27,12 @@ servers:
   mosquitto:
     host: test.mosquitto.org
     protocol: mqtt
+    protocolVersion: '3.1.1'
+    pathname: /mqtt
     description: Public test broker.
+    tags:
+      - name: primary
+    x-internal-note: primary broker
     variables:
       port:
         default: '1883'
@@ -43,6 +51,12 @@ channels:
     address: 'smartylighting/streetlights/1/0/event/{streetlightId}/lighting/measured'
     title: Light measured
     description: Telemetry published whenever a light takes a reading.
+    tags:
+      - name: telemetry
+    externalDocs:
+      url: https://example.com/docs/light-measured-channel
+      description: Light measured channel reference
+    x-channel-note: primary telemetry channel
     parameters:
       streetlightId:
         description: The identifier of the streetlight.
@@ -87,9 +101,16 @@ channels:
     description: >
       Documented ahead of an operation being wired to it -- a light will eventually publish
       here, but no publish/subscribe operation references it yet.
+    tags:
+      - name: diagnostics
+    externalDocs:
+      url: https://example.com/docs/faults
+      description: Fault codes reference
+    x-channel-note: legacy channel
     parameters:
       streetlightId:
         description: The identifier of the streetlight.
+        location: '$message.payload#/streetlightId'
 operations:
   receiveLightMeasurement:
     action: receive
@@ -135,6 +156,11 @@ components:
       title: Light measured
       summary: Reports the current luminosity of a streetlight.
       contentType: application/json
+      tags:
+        - name: telemetry
+      externalDocs:
+        url: https://example.com/docs/light-measured
+        description: Light measured message reference
       correlationId:
         location: '$message.header#/correlationId'
         description: Correlates a reading with the request that triggered it, when polled.
@@ -142,6 +168,7 @@ components:
         mqtt:
           payloadFormatIndicator: 1
           bindingVersion: 0.2.0
+      x-message-note: authored on the message
       payload:
         type: object
         required: [lumens, sentAt]

@@ -153,6 +153,10 @@ export async function parseAsyncApi(
       url: safe(() => server.url()) ?? server.host?.() ?? '',
       description: server.description(),
       protocol: server.protocol(),
+      protocolVersion: server.hasProtocolVersion?.()
+        ? safe(() => server.protocolVersion())
+        : undefined,
+      pathname: server.hasPathname?.() ? safe(() => server.pathname()) : undefined,
       variables: nonEmpty(
         safe(() => server.variables().all())?.map((variable) => ({
           name: variable.id(),
@@ -166,6 +170,15 @@ export async function parseAsyncApi(
         securitySchemeNames,
       ),
       bindings: toBindings(safe(() => server.bindings())),
+      tags: nonEmpty(
+        safe(() =>
+          server
+            .tags()
+            .all()
+            .map((tag) => tag.name()),
+        ),
+      ),
+      extensions: parseExtensions(server),
     }));
 
   const tags: TagInfo[] = document
@@ -226,6 +239,10 @@ export async function parseAsyncApi(
           : undefined,
         bindings: toBindings(safe(() => operation.bindings())),
         channelBindings: channel ? toBindings(safe(() => channel.bindings())) : undefined,
+        channelTags: channel ? readChannelTags(channel) : undefined,
+        channelExternalDocs: channel ? readChannelExternalDocs(channel) : undefined,
+        extensions: parseExtensions(operation),
+        channelExtensions: channel ? parseExtensions(channel) : undefined,
         reply: reply
           ? ({
               channelAddress: safe(() => reply.channel()?.address() ?? reply.channel()?.id()),
@@ -269,6 +286,9 @@ export async function parseAsyncApi(
             ),
           ),
           bindings: toBindings(safe(() => channel.bindings())),
+          tags: readChannelTags(channel),
+          externalDocs: readChannelExternalDocs(channel),
+          extensions: parseExtensions(channel),
         }) satisfies ChannelInfo,
     );
 
@@ -309,6 +329,11 @@ export async function parseAsyncApi(
     securitySchemes,
     defaultContentType: safe(() => document.defaultContentType()),
     orphanChannels,
+    applicationId: info.hasId() ? safe(() => info.id()) : undefined,
+    // Root and info-level extensions folded into one list, same reasoning as OpenAPI's own
+    // root+info fold (see `formats/openapi/index.ts`): a reader has no reason to care which
+    // of AsyncAPI's two top-level objects an extension happened to be attached to.
+    extensions: nonEmpty([...(parseExtensions(document) ?? []), ...(parseExtensions(info) ?? [])]),
     nav: buildNav(operations, orphanChannels, schemas),
     warnings,
   };
@@ -535,6 +560,33 @@ function readTitle(channel: unknown): string | undefined {
   return typeof titled.title === 'function' ? titled.title() : undefined;
 }
 
+/**
+ * AsyncAPI 3.x channels answer `tags()`/`hasExternalDocs()`/`externalDocs()` at runtime
+ * (`Channel extends CoreModel`, `@asyncapi/parser`'s `cjs/models/v3/mixins.js`), but
+ * `ChannelInterface` types neither -- the same situation `readTitle` above already handles
+ * for `title`, and the same fix: cast past the typed model, guarded by `typeof === 'function'`
+ * so a 2.x channel (whose class has neither method at all) yields `undefined` rather than
+ * throwing. Closing this was judged worth it *because* it already has a tested precedent in
+ * this exact file, unlike, say, inventing a cast with no prior art to lean on.
+ */
+function readChannelTags(channel: unknown): string[] | undefined {
+  const tagged = channel as { tags?: () => { all(): Array<{ name(): string }> } };
+  if (typeof tagged.tags !== 'function') return undefined;
+  return nonEmpty(safe(() => tagged.tags?.().all())?.map((tag) => tag.name()));
+}
+
+/** As {@link readChannelTags}, for `externalDocs`. */
+function readChannelExternalDocs(channel: unknown): ExternalDocs | undefined {
+  const documented = channel as {
+    hasExternalDocs?: () => boolean;
+    externalDocs?: () => unknown;
+  };
+  if (typeof documented.hasExternalDocs !== 'function') return undefined;
+  return documented.hasExternalDocs()
+    ? toExternalDocs(safe(() => documented.externalDocs?.()))
+    : undefined;
+}
+
 /** Channel parameters are always path-shaped: they are substituted into the address. */
 // biome-ignore lint/suspicious/noExplicitAny: the parser's channel model is structurally typed
 function parseChannelParameters(channel: any): Parameter[] {
@@ -543,10 +595,33 @@ function parseChannelParameters(channel: any): Parameter[] {
   return parameters.map((parameter: any) => ({
     name: parameter.id(),
     in: 'path' as const,
-    description: safe(() => parameter.description()),
+    description: describeParameterLocation(parameter),
     required: true,
     schema: normaliseAsyncApiSchema(parameterSchema(parameter)),
   }));
+}
+
+/**
+ * A 3.0 Parameter Object's `location`: a runtime expression pointing at where its value
+ * actually comes from, when that is something other than the channel address template it
+ * substitutes into by default (the only case {@link Parameter.in}'s hard-coded `'path'`
+ * models). `Parameter` has no field of its own for an arbitrary runtime expression -- unlike
+ * `MessageInfo.correlationId.location`, this is a shared, cross-format type this card is not
+ * scoped to widen -- so a non-default `location` is folded into the description instead of
+ * silently dropped, which is honest about the parameter without inventing new shape for a
+ * rare case (2.x parameters, and most 3.0 ones, have no `location` at all).
+ */
+// biome-ignore lint/suspicious/noExplicitAny: the parser's parameter model is structurally typed
+function describeParameterLocation(parameter: any): string | undefined {
+  const description = safe(() => parameter.description());
+  const location = parameter.hasLocation?.() ? safe(() => parameter.location()) : undefined;
+  if (!location) return description;
+  const note = `Located via: \`${location}\``;
+  return description
+    ? `${description}
+
+${note}`
+    : note;
 }
 
 /**
@@ -610,6 +685,18 @@ function toMessageInfo(
         }
       : undefined,
     bindings: toBindings(safe(() => message.bindings())),
+    tags: nonEmpty(
+      safe(() =>
+        message
+          .tags()
+          .all()
+          .map((tag: { name(): string }) => tag.name()),
+      ),
+    ),
+    externalDocs: message.hasExternalDocs?.()
+      ? toExternalDocs(safe(() => message.externalDocs()))
+      : undefined,
+    extensions: parseExtensions(message),
   };
 }
 
@@ -643,6 +730,26 @@ function toExamples(examples: any[]): ExampleValue[] | undefined {
       ? example.payload()
       : (safe(() => example.headers()) ?? undefined),
   }));
+}
+
+/**
+ * `x-*` extensions authored directly on `model`, excluding {@link PARSER_INJECTED_EXTENSION_KEYS}
+ * -- the same filtering intent as card 36's schema-level filter, applied here to the parser's
+ * own typed `.extensions()` accessor rather than a plain JSON record: every AsyncAPI object
+ * reaching this function is already a parsed model instance, not raw JSON, unlike OpenAPI's
+ * `parseExtensions` (`formats/openapi/index.ts`), which reads a dereferenced plain object.
+ * `Extension.id()` already returns the key with its `x-` prefix intact (confirmed against
+ * `@asyncapi/parser`'s own `cjs/models/v3/mixins.js`), so no prefix handling is needed here.
+ */
+function parseExtensions(
+  model: { extensions?: () => { all(): Array<{ id(): string; value(): unknown }> } } | undefined,
+): Array<{ key: string; value: unknown }> | undefined {
+  const list = safe(() => model?.extensions?.().all());
+  if (!list) return undefined;
+  const entries = list
+    .filter((extension) => !PARSER_INJECTED_EXTENSION_KEYS.has(extension.id()))
+    .map((extension) => ({ key: extension.id(), value: extension.value() }));
+  return entries.length > 0 ? entries : undefined;
 }
 
 /** Reads an AsyncAPI External Documentation Object model into the shared shape. */

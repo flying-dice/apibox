@@ -2,6 +2,8 @@
   import type { ChannelOperation } from '@apibox/core';
   import CollapsibleCard from '../../molecules/CollapsibleCard.svelte';
   import Badge from '../../atoms/Badge.svelte';
+  import Chip from '../../atoms/Chip.svelte';
+  import Link from '../../atoms/Link.svelte';
   import BindingList from '../../organisms/BindingList.svelte';
   import ParameterTable from '../../organisms/ParameterTable.svelte';
   import AsyncApiMessage from './AsyncApiMessage.svelte';
@@ -39,6 +41,18 @@
       Available on: {operation.channelServers.join(', ')}
     </p>
   {/if}
+  {#if operation.channelTags?.length}
+    <div class="channel-tags" data-testid="{testId}-channel-tags">
+      {#each operation.channelTags as tag, index (tag)}
+        <Badge tone="neutral" variant="outline" small testId="{testId}-channel-tag-{index}">{tag}</Badge>
+      {/each}
+    </div>
+  {/if}
+  {#if operation.channelExternalDocs}
+    <Link href={operation.channelExternalDocs.url} testId="{testId}-channel-external-docs">
+      {operation.channelExternalDocs.description ?? 'Docs'}
+    </Link>
+  {/if}
 
   {#if operation.security?.length}
     <div class="security" data-testid="{testId}-security">
@@ -58,6 +72,30 @@
     label="Channel"
   />
   <BindingList bindings={operation.bindings} testId="{testId}-bindings" label="Operation" />
+  {#if operation.channelExtensions?.length}
+    <div class="extensions" data-testid="{testId}-channel-extensions">
+      {#each operation.channelExtensions as extension (extension.key)}
+        <Chip
+          label={extension.key}
+          value={typeof extension.value === 'string' ? extension.value : JSON.stringify(extension.value)}
+          code
+          testId="{testId}-channel-extension-{extension.key}"
+        />
+      {/each}
+    </div>
+  {/if}
+  {#if operation.extensions?.length}
+    <div class="extensions" data-testid="{testId}-extensions">
+      {#each operation.extensions as extension (extension.key)}
+        <Chip
+          label={extension.key}
+          value={typeof extension.value === 'string' ? extension.value : JSON.stringify(extension.value)}
+          code
+          testId="{testId}-extension-{extension.key}"
+        />
+      {/each}
+    </div>
+  {/if}
   {#each operation.messages as message, index (`${message.name}-${index}`)}
     <AsyncApiMessage {message} testId="{testId}-message-{index}" />
   {/each}
@@ -93,6 +131,13 @@
 
   .servers {
     color: var(--apibox-fg-muted);
+  }
+
+  .channel-tags,
+  .extensions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--apibox-space-2);
   }
 
   .security {

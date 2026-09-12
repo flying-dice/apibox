@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { ServerInfo } from '@apibox/core';
+  import Badge from '../atoms/Badge.svelte';
   import Chip from '../atoms/Chip.svelte';
   import Code from '../atoms/Code.svelte';
   import KeyValueRow from '../molecules/KeyValueRow.svelte';
@@ -21,7 +22,21 @@
         <article class="server" data-testid="{testId}-{index}">
           <Code testId="{testId}-{index}-url">{server.url}</Code>
           {#if server.description}<p>{server.description}</p>{/if}
-          {#if server.protocol}<p>Protocol: {server.protocol}</p>{/if}
+          {#if server.protocol}
+            <p>
+              Protocol: {server.protocol}{#if server.protocolVersion}&nbsp;v{server.protocolVersion}{/if}
+            </p>
+          {/if}
+          {#if server.pathname}<Code testId="{testId}-{index}-pathname">{server.pathname}</Code>{/if}
+          {#if server.tags?.length}
+            <div class="tags" data-testid="{testId}-{index}-tags">
+              {#each server.tags as tag, tagIndex (tagIndex)}
+                <Badge tone="neutral" variant="outline" small testId="{testId}-{index}-tag-{tagIndex}">
+                  {tag}
+                </Badge>
+              {/each}
+            </div>
+          {/if}
           {#if server.variables?.length}
             <dl data-testid="{testId}-{index}-variables">
               {#each server.variables as variable, variableIndex (variableIndex)}
@@ -90,7 +105,8 @@
   }
 
   .security,
-  .extensions {
+  .extensions,
+  .tags {
     display: flex;
     flex-wrap: wrap;
     gap: var(--apibox-space-2);
