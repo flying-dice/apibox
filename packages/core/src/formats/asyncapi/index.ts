@@ -18,7 +18,7 @@ import type {
   ServerInfo,
   TagInfo,
 } from '../../types.js';
-import { asRecord, slugify, uniqueId } from '../../utils.js';
+import { asArray, asRecord, asString, slugify, uniqueId } from '../../utils.js';
 import { at, dereferenceDocument, parseContact, schemaNavigation, setAt } from '../shared.js';
 
 export interface ParseAsyncApiOptions {
@@ -561,30 +561,32 @@ function readTitle(channel: unknown): string | undefined {
 }
 
 /**
- * AsyncAPI 3.x channels answer `tags()`/`hasExternalDocs()`/`externalDocs()` at runtime
- * (`Channel extends CoreModel`, `@asyncapi/parser`'s `cjs/models/v3/mixins.js`), but
- * `ChannelInterface` types neither -- the same situation `readTitle` above already handles
- * for `title`, and the same fix: cast past the typed model, guarded by `typeof === 'function'`
- * so a 2.x channel (whose class has neither method at all) yields `undefined` rather than
- * throwing. Closing this was judged worth it *because* it already has a tested precedent in
- * this exact file, unlike, say, inventing a cast with no prior art to lean on.
+ * `ChannelInterface`'s typed extends list omits `TagsMixinInterface`/
+ * `ExternalDocumentationMixinInterface` (unlike `readTitle` above, which reaches past the
+ * type via a runtime method that only exists because `Channel extends CoreModel` on 3.x).
+ * Rather than repeating that cast-into-internals move for a second field pair, this reads
+ * the same data through `BaseModel.json()` -- declared on every model's own public
+ * interface (`node_modules/@asyncapi/parser/cjs/models/base.d.ts`), so it is public,
+ * documented API, not a reach past the type system. `.json()` returns the plain
+ * post-resolution document object for this one model; 2.x channels have no `tags`/
+ * `externalDocs` field at all (the 2.x Channel Item Object never had them), so the guards
+ * below simply see nothing and return `undefined` rather than throwing.
  */
 function readChannelTags(channel: unknown): string[] | undefined {
-  const tagged = channel as { tags?: () => { all(): Array<{ name(): string }> } };
-  if (typeof tagged.tags !== 'function') return undefined;
-  return nonEmpty(safe(() => tagged.tags?.().all())?.map((tag) => tag.name()));
+  const raw = asRecord(safe(() => (channel as { json(): unknown }).json()));
+  return nonEmpty(
+    asArray(raw?.tags)
+      .map((tag) => asString(asRecord(tag)?.name))
+      .filter((name): name is string => name !== undefined),
+  );
 }
 
 /** As {@link readChannelTags}, for `externalDocs`. */
 function readChannelExternalDocs(channel: unknown): ExternalDocs | undefined {
-  const documented = channel as {
-    hasExternalDocs?: () => boolean;
-    externalDocs?: () => unknown;
-  };
-  if (typeof documented.hasExternalDocs !== 'function') return undefined;
-  return documented.hasExternalDocs()
-    ? toExternalDocs(safe(() => documented.externalDocs?.()))
-    : undefined;
+  const raw = asRecord(safe(() => (channel as { json(): unknown }).json()));
+  const docs = asRecord(raw?.externalDocs);
+  const url = asString(docs?.url);
+  return url ? { url, description: asString(docs?.description) } : undefined;
 }
 
 /** Channel parameters are always path-shaped: they are substituted into the address. */

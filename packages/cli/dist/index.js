@@ -911,16 +911,14 @@ function readTitle(channel) {
   return typeof titled.title === "function" ? titled.title() : undefined;
 }
 function readChannelTags(channel) {
-  const tagged = channel;
-  if (typeof tagged.tags !== "function")
-    return;
-  return nonEmpty(safe(() => tagged.tags?.().all())?.map((tag) => tag.name()));
+  const raw = asRecord(safe(() => channel.json()));
+  return nonEmpty(asArray(raw?.tags).map((tag) => asString(asRecord(tag)?.name)).filter((name) => name !== undefined));
 }
 function readChannelExternalDocs(channel) {
-  const documented = channel;
-  if (typeof documented.hasExternalDocs !== "function")
-    return;
-  return documented.hasExternalDocs() ? toExternalDocs(safe(() => documented.externalDocs?.())) : undefined;
+  const raw = asRecord(safe(() => channel.json()));
+  const docs = asRecord(raw?.externalDocs);
+  const url = asString(docs?.url);
+  return url ? { url, description: asString(docs?.description) } : undefined;
 }
 function parseChannelParameters(channel) {
   const parameters = safe(() => channel.parameters().all()) ?? [];
@@ -1130,6 +1128,7 @@ async function parseJsonRpc(raw, options = {}) {
   const tagInfoByName = new Map;
   const methods = parseMethods(dereferenced, names, tagInfoByName, warnings);
   const schemas = parseComponentSchemas(dereferenced, names);
+  const contentDescriptors = parseComponentContentDescriptors(dereferenced, names);
   return {
     id: options.id ?? slugify(title),
     kind: "jsonrpc",
@@ -1146,10 +1145,30 @@ async function parseJsonRpc(raw, options = {}) {
     tags: collectTags(methods, tagInfoByName),
     methods,
     schemas,
-    nav: buildNav2(methods, schemas),
+    contentDescriptors,
+    nav: buildNav2(methods, schemas, contentDescriptors),
     warnings,
     extensions: parseExtensions2(dereferenced)
   };
+}
+function parseComponentContentDescriptors(root, names) {
+  const descriptors = asRecord(asRecord(root.components)?.contentDescriptors);
+  if (!descriptors)
+    return [];
+  return Object.entries(descriptors).map(([key, value]) => {
+    const entry = asRecord(value);
+    if (!entry)
+      return;
+    return {
+      name: asString(entry.name) ?? key,
+      summary: asString(entry.summary),
+      description: asString(entry.description),
+      required: entry.required === true,
+      deprecated: entry.deprecated === true,
+      schema: normaliseSchema(entry.schema, { names }),
+      extensions: parseExtensions2(entry)
+    };
+  }).filter((entry) => entry !== undefined);
 }
 function parseExtensions2(record) {
   const entries = Object.entries(record).filter(([key]) => isExtensionKey(key));
@@ -1159,8 +1178,10 @@ function parseServers(raw) {
   return asArray(raw).map((entry) => asRecord(entry)).filter((entry) => Boolean(entry)).map((entry) => ({
     name: asString(entry.name) ?? asString(entry.url) ?? "server",
     url: asString(entry.url) ?? "",
-    description: asString(entry.summary) ?? asString(entry.description),
-    variables: parseServerVariables(entry.variables)
+    summary: asString(entry.summary),
+    description: asString(entry.description),
+    variables: parseServerVariables(entry.variables),
+    extensions: parseExtensions2(entry)
   }));
 }
 function parseServerVariables(raw) {
@@ -1205,7 +1226,8 @@ function parseMethods(root, names, tagInfoByName, warnings) {
           tagInfoByName.set(tagName, {
             name: tagName,
             description: asString(record.description),
-            externalDocs: parseExternalDocs(record.externalDocs)
+            externalDocs: parseExternalDocs(record.externalDocs),
+            extensions: parseExtensions2(record)
           });
         }
         return tagName;
@@ -1214,7 +1236,8 @@ function parseMethods(root, names, tagInfoByName, warnings) {
       params: parseParams(entry.params, names),
       result: result ? {
         name: asString(result.name) ?? "result",
-        description: asString(result.description) ?? asString(result.summary),
+        summary: asString(result.summary),
+        description: asString(result.description),
         schema: normaliseSchema(result.schema, { names }),
         deprecated: result.deprecated === true
       } : undefined,
@@ -1240,9 +1263,12 @@ function parseLinks(raw) {
       server: server ? {
         name: asString(server.name) ?? asString(server.url) ?? "server",
         url: asString(server.url) ?? "",
-        description: asString(server.summary) ?? asString(server.description),
-        variables: parseServerVariables(server.variables)
-      } : undefined
+        summary: asString(server.summary),
+        description: asString(server.description),
+        variables: parseServerVariables(server.variables),
+        extensions: parseExtensions2(server)
+      } : undefined,
+      extensions: parseExtensions2(entry)
     };
   });
 }
@@ -1252,10 +1278,12 @@ function toParamStructure(value) {
 function parseParams(raw, names) {
   return asArray(raw).map((entry) => asRecord(entry)).filter((entry) => Boolean(entry && asString(entry.name))).map((entry) => ({
     name: asString(entry.name),
-    description: asString(entry.description) ?? asString(entry.summary),
+    summary: asString(entry.summary),
+    description: asString(entry.description),
     required: entry.required === true,
     deprecated: entry.deprecated === true,
-    schema: normaliseSchema(entry.schema, { names })
+    schema: normaliseSchema(entry.schema, { names }),
+    extensions: parseExtensions2(entry)
   }));
 }
 function parseErrors(raw, names) {
@@ -1263,7 +1291,8 @@ function parseErrors(raw, names) {
     code: typeof entry.code === "number" ? entry.code : 0,
     message: asString(entry.message) ?? "",
     description: asString(entry.description),
-    schema: normaliseSchema(entry.data, { names })
+    schema: normaliseSchema(entry.data, { names }),
+    extensions: parseExtensions2(entry)
   }));
 }
 function parseExamples(raw, structure) {
@@ -1281,10 +1310,12 @@ function parseExamples(raw, structure) {
     const result = asRecord(entry.result);
     return {
       name: asString(entry.name) ?? "Example",
-      description: asString(entry.description) ?? asString(entry.summary),
+      summary: asString(entry.summary),
+      description: asString(entry.description),
       params: named ? Object.fromEntries(paramNames.map((paramName, i) => [paramName, params[i]])) : params,
       result: result && "value" in result ? result.value : undefined,
-      resultExternalValue: result && !("value" in result) ? asString(result.externalValue) : undefined
+      resultExternalValue: result && !("value" in result) ? asString(result.externalValue) : undefined,
+      extensions: parseExtensions2(entry)
     };
   });
 }
@@ -1301,7 +1332,7 @@ function collectTags(methods, tagInfoByName) {
   }
   return tags;
 }
-function buildNav2(methods, schemas) {
+function buildNav2(methods, schemas, contentDescriptors) {
   const groups = new Map;
   for (const method of methods) {
     const tag = method.tags[0] ?? "Methods";
@@ -1326,6 +1357,18 @@ function buildNav2(methods, schemas) {
   const schemasNode = schemaNavigation(schemas);
   if (schemasNode)
     nav.push(schemasNode);
+  if (contentDescriptors.length > 0) {
+    const childIds = new Set;
+    nav.push({
+      id: "content-descriptors",
+      label: "Content Descriptors",
+      children: contentDescriptors.map((descriptor) => ({
+        id: uniqueId(`content-descriptor-${slugify(descriptor.name)}`, childIds),
+        label: descriptor.name,
+        deprecated: descriptor.deprecated
+      }))
+    });
+  }
   return nav;
 }
 

@@ -1543,6 +1543,19 @@ describe('AsyncAPI', () => {
     expect(receive?.channelServers).toEqual(['mosquitto']);
   });
 
+  it("reads a 3.x channel's own tags and externalDocs through Model.json(), independent of the operation's own tags", async () => {
+    const doc = await load();
+    const receive = doc.operations.find((o) => o.action === 'receive');
+    // The channel's own tag ('telemetry', name-only, no description of its own) is distinct
+    // from the operation's tag of the same name -- both happen to share a name here, but
+    // `channelTags` is read from the channel object, not copied from `operation.tags`.
+    expect(receive?.channelTags).toEqual(['telemetry']);
+    expect(receive?.channelExternalDocs).toEqual({
+      url: 'https://example.com/docs/light-measured-channel',
+      description: 'Light measured channel reference',
+    });
+  });
+
   it('models operation reply: the reply channel, address location and its message', async () => {
     const doc = await load();
     const dim = doc.operations.find((o) => o.id === 'senddimlight');
@@ -2125,6 +2138,19 @@ describe('AsyncAPI 2.x', () => {
     ]);
   });
 
+  it('leaves channelTags/channelExternalDocs undefined on a 2.x document, which has no such channel-level fields at all', async () => {
+    // The 2.x Channel Item Object never had `tags`/`externalDocs` -- only 3.x added them.
+    // `readChannelTags`/`readChannelExternalDocs` read through `Model.json()`, which for a
+    // 2.x channel simply has no `tags`/`externalDocs` key to find, so this exercises the
+    // same defensive guard the 3.x-only fixture above cannot.
+    const doc = (await loadApiDocument(
+      fixtures('v2-streetlights.asyncapi.yaml'),
+    )) as AsyncApiDocument;
+    const operation = doc.operations[0];
+    expect(operation?.channelTags).toBeUndefined();
+    expect(operation?.channelExternalDocs).toBeUndefined();
+  });
+
   it('reads AMQP bindings on a 2.x channel, its subscribe operation and its message, through the same generic model as 3.x', async () => {
     const doc = (await loadApiDocument(
       fixtures('v2-streetlights.asyncapi.yaml'),
@@ -2253,6 +2279,7 @@ describe('JSON-RPC', () => {
       'transfers',
       'subscriptions',
       'Schemas',
+      'Content Descriptors',
     ]);
   });
 
@@ -2321,8 +2348,11 @@ describe('JSON-RPC', () => {
   it('parses a per-method server override, independent of the document default', async () => {
     const doc = await load();
     const sendTransfer = doc.methods.find((m) => m.name === 'sendTransfer');
+    // `summary` (a short label) and `description` (prose) are distinct Server Object
+    // fields -- the fixture sets only `summary`, so `description` stays undefined rather
+    // than being backfilled from it.
     expect(sendTransfer?.servers).toEqual([
-      { name: 'relay', url: 'https://relay.example.com', description: 'Dedicated broadcast relay' },
+      { name: 'relay', url: 'https://relay.example.com', summary: 'Dedicated broadcast relay' },
     ]);
     expect(sendTransfer?.externalDocs?.url).toBe('https://docs.example.com/sendTransfer');
   });
@@ -2364,6 +2394,97 @@ describe('JSON-RPC', () => {
     expect(doc.tags).toEqual([
       { name: 'shared', description: 'A tag reused by two methods.', externalDocs: undefined },
     ]);
+  });
+
+  it('captures x-* extensions on a param, a tag, a link and an example, filtering nothing since none of these are parser-injected', async () => {
+    const doc = await load();
+    const getBalance = doc.methods[0];
+    expect(getBalance?.params.find((p) => p.name === 'address')?.extensions).toEqual([
+      { key: 'x-note', value: 'Case-insensitive hex address.' },
+    ]);
+    expect(doc.tags.find((t) => t.name === 'accounts')?.extensions).toEqual([
+      { key: 'x-tag-color', value: 'blue' },
+    ]);
+    expect(getBalance?.links[0]?.extensions).toEqual([
+      { key: 'x-link-note', value: 'primary follow-up call' },
+    ]);
+    expect(getBalance?.examples[1]?.extensions).toEqual([
+      { key: 'x-example-source', value: 'vendor' },
+    ]);
+  });
+
+  it('captures an x-* extension on an error and on a server, at the levels the audit found missing', async () => {
+    const doc = await load();
+    const sendTransfer = doc.methods.find((m) => m.name === 'sendTransfer');
+    expect(sendTransfer?.errors.find((e) => e.code === -32002)?.extensions).toEqual([
+      { key: 'x-retry-after', value: 30 },
+    ]);
+    expect(doc.servers[0]?.extensions).toEqual([{ key: 'x-region', value: 'global' }]);
+  });
+
+  it('keeps a Server Object summary distinct from its description rather than collapsing them', async () => {
+    const doc = await load();
+    expect(doc.servers[0]?.summary).toBe('Production node');
+    expect(doc.servers[0]?.description).toBe('Primary mainnet RPC endpoint.');
+  });
+
+  it('keeps a ContentDescriptor and a result summary distinct from description', async () => {
+    const doc = await load();
+    // `transaction` (sendTransfer's only param) has neither field set in the fixture --
+    // confirms the split does not fabricate a summary that was never there.
+    const transaction = doc.methods.find((m) => m.name === 'sendTransfer')?.params[0];
+    expect(transaction?.summary).toBeUndefined();
+    // The catalogue entry below has both, which is the case this row exists to prove.
+    const address = doc.contentDescriptors.find((d) => d.name === 'AccountAddress');
+    expect(address?.summary).toBe('A wallet account address');
+    expect(address?.description).toBe(
+      'Shared address shape reused across balance and transfer flows.',
+    );
+  });
+
+  it('keeps an Example Object summary distinct from description', async () => {
+    // No fixture example currently sets both at once; this constructs one directly to
+    // prove the fields land in the right slots rather than one another.
+    const doc = (await parseApiDocument({
+      openrpc: '1.3.2',
+      info: { title: 'Example summary', version: '1.0.0' },
+      methods: [
+        {
+          name: 'ping',
+          params: [],
+          examples: [
+            {
+              name: 'basic',
+              summary: 'A quick smoke test',
+              description: 'Calls ping with no arguments and expects an empty result.',
+              params: [],
+              result: { name: 'r', value: null },
+            },
+          ],
+        },
+      ],
+    })) as JsonRpcDocument;
+    const example = doc.methods[0]?.examples[0];
+    expect(example?.summary).toBe('A quick smoke test');
+    expect(example?.description).toBe('Calls ping with no arguments and expects an empty result.');
+  });
+
+  it('catalogues components.contentDescriptors independent of whether any method references them', async () => {
+    const doc = await load();
+    // `AccountAddress` is defined in `components.contentDescriptors` but no method's
+    // params/result points at it via `$ref` -- this is exactly the "browse everything
+    // reusable" case a per-method view alone cannot show.
+    expect(doc.contentDescriptors.map((d) => d.name)).toEqual(['AccountAddress']);
+    const address = doc.contentDescriptors[0];
+    expect(address?.required).toBe(true);
+    expect(address?.schema?.constraints).toContainEqual({
+      label: 'pattern',
+      value: '^0x[a-fA-F0-9]{40}$',
+    });
+    expect(address?.extensions).toEqual([{ key: 'x-shared', value: true }]);
+    expect(
+      doc.nav.find((n) => n.id === 'content-descriptors')?.children?.map((c) => c.label),
+    ).toEqual(['AccountAddress']);
   });
 });
 

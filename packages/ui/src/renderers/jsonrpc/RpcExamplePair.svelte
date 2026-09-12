@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { RpcExample } from '@apibox/core';
+  import Chip from '../../atoms/Chip.svelte';
   import Link from '../../atoms/Link.svelte';
   import { formatJson } from '../../format-json.js';
   import CodeBlock from '../../molecules/CodeBlock.svelte';
@@ -15,8 +16,12 @@
 
 <div class="example" data-testid={testId}>
   <h5 data-testid="{testId}-title">{example.name}</h5>
-  {#if example.description}
-    <p data-testid="{testId}-description">{example.description}</p>
+  {#if example.summary || example.description}
+    <p data-testid="{testId}-description">
+      {#if example.summary}<strong>{example.summary}</strong>{/if}
+      {#if example.summary && example.description}&nbsp;&mdash;&nbsp;{/if}
+      {example.description ?? ''}
+    </p>
   {/if}
   <CodeBlock
     code={formatJson(
@@ -48,6 +53,18 @@
       testId="{testId}-response"
     />
   {/if}
+  {#if example.extensions?.length}
+    <div class="extensions" data-testid="{testId}-extensions">
+      {#each example.extensions as extension (extension.key)}
+        <Chip
+          label={extension.key}
+          value={typeof extension.value === 'string' ? extension.value : JSON.stringify(extension.value)}
+          code
+          testId="{testId}-extension-{extension.key}"
+        />
+      {/each}
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -64,5 +81,11 @@
   h5,
   p {
     margin: 0;
+  }
+
+  .extensions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--apibox-space-2);
   }
 </style>

@@ -54,6 +54,7 @@ export async function parseJsonRpc(
   const tagInfoByName = new Map<string, TagInfo>();
   const methods = parseMethods(dereferenced, names, tagInfoByName, warnings);
   const schemas = parseComponentSchemas(dereferenced, names);
+  const contentDescriptors = parseComponentContentDescriptors(dereferenced, names);
 
   return {
     id: options.id ?? slugify(title),
@@ -74,10 +75,52 @@ export async function parseJsonRpc(
     tags: collectTags(methods, tagInfoByName),
     methods,
     schemas,
-    nav: buildNav(methods, schemas),
+    contentDescriptors,
+    nav: buildNav(methods, schemas, contentDescriptors),
     warnings,
     extensions: parseExtensions(dereferenced),
   };
+}
+
+/**
+ * Named entries under `components.contentDescriptors`, independent of which params/results
+ * reference them via `$ref` -- the same "browse everything reusable" gap `components.schemas`
+ * already closed, applied to the one other component bucket whose entries carry their own
+ * distinguishing `name`, the way a schema does.
+ *
+ * The other component buckets deliberately do *not* get this treatment:
+ * - `components.tags` / `components.examplePairings` / `components.examples`: any entry a
+ *   method actually references already renders in full at that method (tags: the nav group
+ *   header; example pairings/examples: the method's own Examples section, resolved by
+ *   `dereferenceDocument`). A catalogue of these would either repeat that content verbatim
+ *   or -- for an entry no method references at all -- show something that is arguably dead
+ *   weight in the source document, not a discoverability gap in apibox.
+ * - `components.links`: same "already renders where referenced" reasoning as tags/examples,
+ *   and, unlike a ContentDescriptor, a Link Object's value is inherently about a specific
+ *   result -> next-call relationship -- showing it divorced from the method whose result it
+ *   follows from would need re-explaining that context, not just re-displaying a name.
+ */
+function parseComponentContentDescriptors(
+  root: Record<string, unknown>,
+  names: Map<object, string>,
+): RpcParam[] {
+  const descriptors = asRecord(asRecord(root.components)?.contentDescriptors);
+  if (!descriptors) return [];
+  return Object.entries(descriptors)
+    .map(([key, value]): RpcParam | undefined => {
+      const entry = asRecord(value);
+      if (!entry) return undefined;
+      return {
+        name: asString(entry.name) ?? key,
+        summary: asString(entry.summary),
+        description: asString(entry.description),
+        required: entry.required === true,
+        deprecated: entry.deprecated === true,
+        schema: normaliseSchema(entry.schema, { names }),
+        extensions: parseExtensions(entry),
+      };
+    })
+    .filter((entry): entry is RpcParam => entry !== undefined);
 }
 
 /** `x-*` specification extensions found directly on `record`, in declaration order. */
@@ -95,8 +138,10 @@ function parseServers(raw: unknown): ServerInfo[] {
     .map((entry) => ({
       name: asString(entry.name) ?? asString(entry.url) ?? 'server',
       url: asString(entry.url) ?? '',
-      description: asString(entry.summary) ?? asString(entry.description),
+      summary: asString(entry.summary),
+      description: asString(entry.description),
       variables: parseServerVariables(entry.variables),
+      extensions: parseExtensions(entry),
     }));
 }
 
@@ -161,6 +206,7 @@ function parseMethods(
                 name: tagName,
                 description: asString(record.description),
                 externalDocs: parseExternalDocs(record.externalDocs),
+                extensions: parseExtensions(record),
               });
             }
             return tagName;
@@ -171,7 +217,8 @@ function parseMethods(
         result: result
           ? {
               name: asString(result.name) ?? 'result',
-              description: asString(result.description) ?? asString(result.summary),
+              summary: asString(result.summary),
+              description: asString(result.description),
               schema: normaliseSchema(result.schema, { names }),
               deprecated: result.deprecated === true,
             }
@@ -210,10 +257,13 @@ function parseLinks(raw: unknown): RpcLink[] {
           ? {
               name: asString(server.name) ?? asString(server.url) ?? 'server',
               url: asString(server.url) ?? '',
-              description: asString(server.summary) ?? asString(server.description),
+              summary: asString(server.summary),
+              description: asString(server.description),
               variables: parseServerVariables(server.variables),
+              extensions: parseExtensions(server),
             }
           : undefined,
+        extensions: parseExtensions(entry),
       } satisfies RpcLink;
     });
 }
@@ -229,10 +279,12 @@ function parseParams(raw: unknown, names: Map<object, string>): RpcParam[] {
     .filter((entry): entry is Record<string, unknown> => Boolean(entry && asString(entry.name)))
     .map((entry) => ({
       name: asString(entry.name) as string,
-      description: asString(entry.description) ?? asString(entry.summary),
+      summary: asString(entry.summary),
+      description: asString(entry.description),
       required: entry.required === true,
       deprecated: entry.deprecated === true,
       schema: normaliseSchema(entry.schema, { names }),
+      extensions: parseExtensions(entry),
     }));
 }
 
@@ -245,6 +297,7 @@ function parseErrors(raw: unknown, names: Map<object, string>): RpcError[] {
       message: asString(entry.message) ?? '',
       description: asString(entry.description),
       schema: normaliseSchema(entry.data, { names }),
+      extensions: parseExtensions(entry),
     }));
 }
 
@@ -274,7 +327,8 @@ function parseExamples(raw: unknown, structure: RpcMethod['paramStructure']): Rp
 
       return {
         name: asString(entry.name) ?? 'Example',
-        description: asString(entry.description) ?? asString(entry.summary),
+        summary: asString(entry.summary),
+        description: asString(entry.description),
         params: named
           ? Object.fromEntries(paramNames.map((paramName, i) => [paramName as string, params[i]]))
           : params,
@@ -283,6 +337,7 @@ function parseExamples(raw: unknown, structure: RpcMethod['paramStructure']): Rp
         // `externalValue` properly, as its own field, rather than as a placeholder.
         resultExternalValue:
           result && !('value' in result) ? asString(result.externalValue) : undefined,
+        extensions: parseExtensions(entry),
       } satisfies RpcExample;
     });
 }
@@ -300,7 +355,11 @@ function collectTags(methods: RpcMethod[], tagInfoByName: Map<string, TagInfo>):
   return tags;
 }
 
-function buildNav(methods: RpcMethod[], schemas: SchemaNode[]): NavNode[] {
+function buildNav(
+  methods: RpcMethod[],
+  schemas: SchemaNode[],
+  contentDescriptors: RpcParam[],
+): NavNode[] {
   const groups = new Map<string, RpcMethod[]>();
   for (const method of methods) {
     const tag = method.tags[0] ?? 'Methods';
@@ -324,6 +383,19 @@ function buildNav(methods: RpcMethod[], schemas: SchemaNode[]): NavNode[] {
 
   const schemasNode = schemaNavigation(schemas);
   if (schemasNode) nav.push(schemasNode);
+
+  if (contentDescriptors.length > 0) {
+    const childIds = new Set<string>();
+    nav.push({
+      id: 'content-descriptors',
+      label: 'Content Descriptors',
+      children: contentDescriptors.map((descriptor) => ({
+        id: uniqueId(`content-descriptor-${slugify(descriptor.name)}`, childIds),
+        label: descriptor.name,
+        deprecated: descriptor.deprecated,
+      })),
+    });
+  }
 
   return nav;
 }

@@ -242,6 +242,12 @@ export interface ServerInfo {
   name: string;
   url: string;
   description?: string;
+  /**
+   * OpenRPC only: the Server Object's own `summary`, a short label distinct from the
+   * longer-form `description`. AsyncAPI's Server Object has no `summary` field, so this is
+   * always `undefined` there.
+   */
+  summary?: string;
   /** AsyncAPI only. */
   protocol?: string;
   /** AsyncAPI 3.0 only: the protocol's own version, e.g. `"3.1.1"` for an MQTT broker. */
@@ -794,10 +800,14 @@ export interface AsyncApiDocument extends ApiDocumentBase {
 
 export interface RpcParam {
   name: string;
+  /** The ContentDescriptor Object's own short label, distinct from `description`. */
+  summary?: string;
   description?: string;
   required: boolean;
   deprecated?: boolean;
   schema?: SchemaNode;
+  /** `x-*` specification extensions found directly on this object, in declaration order. */
+  extensions?: Array<{ key: string; value: unknown }>;
 }
 
 export interface RpcError {
@@ -805,10 +815,14 @@ export interface RpcError {
   message: string;
   description?: string;
   schema?: SchemaNode;
+  /** `x-*` specification extensions found directly on this object, in declaration order. */
+  extensions?: Array<{ key: string; value: unknown }>;
 }
 
 export interface RpcExample {
   name: string;
+  /** The ExamplePairing Object's own short label, distinct from `description`. */
+  summary?: string;
   description?: string;
   params: unknown;
   /** Absent when the example carries `resultExternalValue` instead. */
@@ -821,6 +835,8 @@ export interface RpcExample {
    * a string placeholder there rather than as a second field per param.
    */
   resultExternalValue?: string;
+  /** `x-*` specification extensions found directly on this object, in declaration order. */
+  extensions?: Array<{ key: string; value: unknown }>;
 }
 
 /**
@@ -840,6 +856,8 @@ export interface RpcLink {
   params?: Array<{ name: string; value: unknown }>;
   /** Overrides the server a linked call should be made against. */
   server?: ServerInfo;
+  /** `x-*` specification extensions found directly on this object, in declaration order. */
+  extensions?: Array<{ key: string; value: unknown }>;
 }
 
 export interface RpcMethod {
@@ -852,7 +870,14 @@ export interface RpcMethod {
   /** `by-name` when the method takes named params, `by-position` for an array. */
   paramStructure: 'by-name' | 'by-position' | 'either';
   params: RpcParam[];
-  result?: { name: string; description?: string; schema?: SchemaNode; deprecated?: boolean };
+  result?: {
+    name: string;
+    /** The result ContentDescriptor's own short label, distinct from `description`. */
+    summary?: string;
+    description?: string;
+    schema?: SchemaNode;
+    deprecated?: boolean;
+  };
   errors: RpcError[];
   examples: RpcExample[];
   links: RpcLink[];
@@ -871,6 +896,14 @@ export interface JsonRpcDocument extends ApiDocumentBase {
   specVersion: string;
   methods: RpcMethod[];
   schemas: SchemaNode[];
+  /**
+   * Named entries under `components.contentDescriptors`, browsable independent of which
+   * methods reference them -- the same "shared building block" value `schemas` already has,
+   * extended to the other component bucket with its own distinguishing `name`. The other
+   * component buckets (`examples`, `links`, `examplePairings`, `tags`) are deliberately not
+   * given an equivalent catalogue; see the parser's own doc comment for why.
+   */
+  contentDescriptors: RpcParam[];
   /** `x-*` specification extensions found at the document root, in declaration order. */
   extensions?: Array<{ key: string; value: unknown }>;
 }

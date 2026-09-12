@@ -6,6 +6,7 @@
   import SchemaCatalog from '../../organisms/SchemaCatalog.svelte';
   import ServerList from '../../organisms/ServerList.svelte';
   import { itemsByNavigation } from '../navigation-groups.js';
+  import RpcContentDescriptorCatalog from './RpcContentDescriptorCatalog.svelte';
   import RpcMethodCard from './RpcMethodCard.svelte';
 
   interface Props {
@@ -16,11 +17,15 @@
   const { document, testId = 'jsonrpc-document' }: Props = $props();
   const groups = $derived(itemsByNavigation(document.nav, document.methods));
   const schemaNavigation = $derived(document.nav.find((node) => node.id === 'schemas'));
+  const contentDescriptorNavigation = $derived(
+    document.nav.find((node) => node.id === 'content-descriptors'),
+  );
   // Tag Object metadata is keyed by name on `document.tags`, not carried on `NavNode`
   // (shared navigation infrastructure other formats also use) -- same lookup-by-label
   // treatment as OpenApiDocument's tag descriptions.
   const tagDescriptions = $derived(new Map(document.tags.map((tag) => [tag.name, tag.description])));
   const tagExternalDocs = $derived(new Map(document.tags.map((tag) => [tag.name, tag.externalDocs])));
+  const tagExtensions = $derived(new Map(document.tags.map((tag) => [tag.name, tag.extensions])));
 </script>
 
 <article class="document" data-testid={testId}>
@@ -42,6 +47,7 @@
   {#each groups as group (group.node.id)}
     {@const groupId = `${testId}-${group.node.id}`}
     {@const docs = tagExternalDocs.get(group.node.label)}
+    {@const extensions = tagExtensions.get(group.node.label)}
     <section id={group.node.id} class="group" data-testid={groupId}>
       <header data-testid="{groupId}-header">
         <h2 data-testid="{groupId}-title">{group.node.label}</h2>
@@ -57,6 +63,18 @@
             </Link>
           </p>
         {/if}
+        {#if extensions?.length}
+          <div class="extensions" data-testid="{groupId}-extensions">
+            {#each extensions as extension (extension.key)}
+              <Chip
+                label={extension.key}
+                value={typeof extension.value === 'string' ? extension.value : JSON.stringify(extension.value)}
+                code
+                testId="{groupId}-extension-{extension.key}"
+              />
+            {/each}
+          </div>
+        {/if}
       </header>
       {#each group.items as method (method.id)}
         <RpcMethodCard {method} testId="{testId}-method-{method.id}" />
@@ -65,6 +83,11 @@
   {/each}
 
   <SchemaCatalog schemas={document.schemas} navigation={schemaNavigation} testId="{testId}-schemas" />
+  <RpcContentDescriptorCatalog
+    contentDescriptors={document.contentDescriptors}
+    navigation={contentDescriptorNavigation}
+    testId="{testId}-content-descriptors"
+  />
 </article>
 
 <style>

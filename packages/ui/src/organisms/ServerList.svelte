@@ -21,7 +21,13 @@
       {#each servers as server, index (index)}
         <article class="server" data-testid="{testId}-{index}">
           <Code testId="{testId}-{index}-url">{server.url}</Code>
-          {#if server.description}<p>{server.description}</p>{/if}
+          {#if server.summary || server.description}
+            <p data-testid="{testId}-{index}-description">
+              {#if server.summary}<strong>{server.summary}</strong>{/if}
+              {#if server.summary && server.description}&nbsp;&mdash;&nbsp;{/if}
+              {server.description ?? ''}
+            </p>
+          {/if}
           {#if server.protocol}
             <p>
               Protocol: {server.protocol}{#if server.protocolVersion}&nbsp;v{server.protocolVersion}{/if}

@@ -65,9 +65,11 @@
               >deprecated</Badge>
             {/if}
           </h5>
-          {#if parameter.description}
+          {#if parameter.summary || parameter.description}
             <p data-testid="{testId}-param-{parameter.name}-{index}-description">
-              {parameter.description}
+              {#if parameter.summary}<strong>{parameter.summary}</strong>{/if}
+              {#if parameter.summary && parameter.description}&nbsp;&mdash;&nbsp;{/if}
+              {parameter.description ?? ''}
             </p>
           {/if}
           <SchemaViewer
@@ -75,6 +77,18 @@
             compact
             testId="{testId}-param-{parameter.name}-{index}-schema"
           />
+          {#if parameter.extensions?.length}
+            <div class="extensions" data-testid="{testId}-param-{parameter.name}-{index}-extensions">
+              {#each parameter.extensions as extension (extension.key)}
+                <Chip
+                  label={extension.key}
+                  value={typeof extension.value === 'string' ? extension.value : JSON.stringify(extension.value)}
+                  code
+                  testId="{testId}-param-{parameter.name}-{index}-extension-{extension.key}"
+                />
+              {/each}
+            </div>
+          {/if}
         </div>
       {/each}
     </section>
@@ -90,8 +104,12 @@
           </Badge>
         {/if}
       </h4>
-      {#if method.result.description}
-        <p data-testid="{testId}-result-description">{method.result.description}</p>
+      {#if method.result.summary || method.result.description}
+        <p data-testid="{testId}-result-description">
+          {#if method.result.summary}<strong>{method.result.summary}</strong>{/if}
+          {#if method.result.summary && method.result.description}&nbsp;&mdash;&nbsp;{/if}
+          {method.result.description ?? ''}
+        </p>
       {/if}
       <SchemaViewer schema={method.result.schema} testId="{testId}-result" />
     </section>
@@ -116,6 +134,18 @@
               compact
               testId="{testId}-error-{error.code}-{index}-schema"
             />
+          {/if}
+          {#if error.extensions?.length}
+            <div class="extensions" data-testid="{testId}-error-{error.code}-{index}-extensions">
+              {#each error.extensions as extension (extension.key)}
+                <Chip
+                  label={extension.key}
+                  value={typeof extension.value === 'string' ? extension.value : JSON.stringify(extension.value)}
+                  code
+                  testId="{testId}-error-{error.code}-{index}-extension-{extension.key}"
+                />
+              {/each}
+            </div>
           {/if}
         </div>
       {/each}
@@ -163,6 +193,18 @@
           {/if}
           {#if link.server}
             <ServerList servers={[link.server]} testId="{testId}-link-{index}-server" />
+          {/if}
+          {#if link.extensions?.length}
+            <div class="extensions" data-testid="{testId}-link-{index}-extensions">
+              {#each link.extensions as extension (extension.key)}
+                <Chip
+                  label={extension.key}
+                  value={typeof extension.value === 'string' ? extension.value : JSON.stringify(extension.value)}
+                  code
+                  testId="{testId}-link-{index}-extension-{extension.key}"
+                />
+              {/each}
+            </div>
           {/if}
         </div>
       {/each}

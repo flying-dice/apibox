@@ -88,6 +88,32 @@ function hasOptionalBooleans(value: Record<string, unknown>, keys: string[]): bo
   return keys.every((key) => value[key] === undefined || typeof value[key] === 'boolean');
 }
 
+/** `x-*` extensions, shaped `{ key, value }[]`, shared by every format that models them. */
+function hasOptionalExtensions(value: Record<string, unknown>): boolean {
+  return (
+    value.extensions === undefined ||
+    (Array.isArray(value.extensions) &&
+      value.extensions.every((entry) => isRecord(entry) && isString(entry.key) && 'value' in entry))
+  );
+}
+
+/**
+ * OpenRPC's ContentDescriptor Object -- shared by a method's own `params`/`result` and by
+ * `components.contentDescriptors`' catalogue entries, so this is factored out rather than
+ * duplicated the way the two call sites used to check the same shape independently.
+ */
+function isRpcParam(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    isString(value.name) &&
+    hasOptionalStrings(value, ['summary', 'description']) &&
+    typeof value.required === 'boolean' &&
+    hasOptionalBooleans(value, ['deprecated']) &&
+    (value.schema === undefined || isSchema(value.schema)) &&
+    hasOptionalExtensions(value)
+  );
+}
+
 function isExternalDocs(value: unknown): boolean {
   return isRecord(value) && isString(value.url) && hasOptionalStrings(value, ['description']);
 }
@@ -383,15 +409,7 @@ function isRpcMethod(value: unknown): boolean {
     ['by-name', 'by-position', 'either'].includes(String(value.paramStructure)) &&
     hasOptionalStrings(value, ['summary', 'description']) &&
     Array.isArray(value.params) &&
-    value.params.every(
-      (parameter) =>
-        isRecord(parameter) &&
-        isString(parameter.name) &&
-        typeof parameter.required === 'boolean' &&
-        hasOptionalStrings(parameter, ['description']) &&
-        hasOptionalBooleans(parameter, ['deprecated']) &&
-        (parameter.schema === undefined || isSchema(parameter.schema)),
-    ) &&
+    value.params.every(isRpcParam) &&
     Array.isArray(value.errors) &&
     value.errors.every(
       (error) =>
@@ -399,25 +417,27 @@ function isRpcMethod(value: unknown): boolean {
         typeof error.code === 'number' &&
         isString(error.message) &&
         hasOptionalStrings(error, ['description']) &&
-        (error.schema === undefined || isSchema(error.schema)),
+        (error.schema === undefined || isSchema(error.schema)) &&
+        hasOptionalExtensions(error),
     ) &&
     Array.isArray(value.examples) &&
     value.examples.every(
       (example) =>
         isRecord(example) &&
         isString(example.name) &&
-        hasOptionalStrings(example, ['description']) &&
+        hasOptionalStrings(example, ['summary', 'description']) &&
         'params' in example &&
         // Either an inline result or an externally hosted one. Requiring `result`
         // unconditionally rejects an externalValue-only example outright, because an
         // absent `result` is dropped entirely by JSON serialisation -- the same trap
         // `isExample` hit for OpenAPI.
-        ('result' in example || isString(example.resultExternalValue)),
+        ('result' in example || isString(example.resultExternalValue)) &&
+        hasOptionalExtensions(example),
     ) &&
     (value.result === undefined ||
       (isRecord(value.result) &&
         isString(value.result.name) &&
-        hasOptionalStrings(value.result, ['description']) &&
+        hasOptionalStrings(value.result, ['summary', 'description']) &&
         (value.result.schema === undefined || isSchema(value.result.schema))))
   );
 }
@@ -473,7 +493,9 @@ export function isApiDocument(value: unknown, expectedId?: string): value is Api
       return (
         Array.isArray(value.methods) &&
         hasUniqueIds(value.methods) &&
-        value.methods.every(isRpcMethod)
+        value.methods.every(isRpcMethod) &&
+        Array.isArray(value.contentDescriptors) &&
+        value.contentDescriptors.every(isRpcParam)
       );
     case 'jsonschema':
       return (

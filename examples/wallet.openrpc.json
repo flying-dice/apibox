@@ -23,7 +23,9 @@
           "enum": ["mainnet", "testnet"],
           "description": "Network to connect to."
         }
-      }
+      },
+      "description": "Primary mainnet RPC endpoint.",
+      "x-region": "global"
     }
   ],
   "methods": [
@@ -37,7 +39,8 @@
           "description": "Methods for inspecting account state.",
           "externalDocs": {
             "url": "https://docs.example.com/accounts"
-          }
+          },
+          "x-tag-color": "blue"
         }
       ],
       "params": [
@@ -49,7 +52,8 @@
             "type": "string",
             "pattern": "^0x[a-fA-F0-9]{40}$",
             "examples": ["0x0000000000000000000000000000000000000001"]
-          }
+          },
+          "x-note": "Case-insensitive hex address."
         },
         {
           "name": "block",
@@ -116,7 +120,8 @@
           "result": {
             "name": "balance",
             "externalValue": "https://example.com/examples/balance.json"
-          }
+          },
+          "x-example-source": "vendor"
         }
       ],
       "links": [
@@ -127,7 +132,8 @@
           "method": "sendTransfer",
           "params": {
             "transaction": "$params.address"
-          }
+          },
+          "x-link-note": "primary follow-up call"
         }
       ]
     },
@@ -171,7 +177,8 @@
       "errors": [
         {
           "code": -32002,
-          "message": "Insufficient funds"
+          "message": "Insufficient funds",
+          "x-retry-after": 30
         },
         {
           "code": -32003,
@@ -198,6 +205,19 @@
     }
   ],
   "components": {
+    "contentDescriptors": {
+      "AccountAddress": {
+        "name": "AccountAddress",
+        "summary": "A wallet account address",
+        "description": "Shared address shape reused across balance and transfer flows.",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "pattern": "^0x[a-fA-F0-9]{40}$"
+        },
+        "x-shared": true
+      }
+    },
     "schemas": {
       "Transaction": {
         "type": "object",

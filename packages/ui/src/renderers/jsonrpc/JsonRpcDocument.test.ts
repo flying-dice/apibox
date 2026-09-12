@@ -29,6 +29,7 @@ function document(overrides: Partial<JsonRpcDocumentModel> = {}): JsonRpcDocumen
     servers: [],
     tags: [],
     schemas: [],
+    contentDescriptors: [],
     warnings: [],
     nav: [
       {
@@ -66,6 +67,18 @@ describe('JsonRpcDocument', () => {
     expect(
       screen.getByTestId('jsonrpc-document-tag-accounts-external-docs-link'),
     ).toHaveTextContent('Accounts guide');
+  });
+
+  it("renders a tag's own x-* extensions as chips above its group section", () => {
+    render(JsonRpcDocument, {
+      document: document({
+        tags: [{ name: 'accounts', extensions: [{ key: 'x-tag-color', value: 'blue' }] }],
+      }),
+    });
+
+    expect(
+      screen.getByTestId('jsonrpc-document-tag-accounts-extension-x-tag-color'),
+    ).toHaveTextContent('blue');
   });
 
   it('renders no description/external-docs scaffolding for a tag that carries neither', () => {

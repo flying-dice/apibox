@@ -33,4 +33,24 @@ describe('RpcExamplePair', () => {
     );
     expect(screen.queryByTestId('example-response')).not.toBeInTheDocument();
   });
+
+  it('renders summary and description on the same row, and an x-* extension as a chip', () => {
+    render(RpcExamplePair, {
+      example: {
+        name: 'Funded account',
+        summary: 'A quick smoke test',
+        description: 'Calls with a known-good address.',
+        params: {},
+        result: {},
+        extensions: [{ key: 'x-example-source', value: 'vendor' }],
+      },
+      methodName: 'getBalance',
+      testId: 'example',
+    });
+
+    const description = screen.getByTestId('example-description');
+    expect(description).toHaveTextContent('A quick smoke test');
+    expect(description).toHaveTextContent('Calls with a known-good address.');
+    expect(screen.getByTestId('example-extension-x-example-source')).toBeInTheDocument();
+  });
 });
