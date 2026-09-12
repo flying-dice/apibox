@@ -223,6 +223,11 @@ export interface ServerInfo {
   security?: SecurityRequirement[];
   /** AsyncAPI only: protocol bindings declared directly on this server. */
   bindings?: BindingInfo[];
+  /**
+   * OpenAPI only: `x-*` specification extensions found directly on this Server Object, in
+   * declaration order. Same shape and rendering philosophy as {@link SchemaNode.extensions}.
+   */
+  extensions?: Array<{ key: string; value: unknown }>;
 }
 
 export interface ExampleValue {
@@ -230,6 +235,13 @@ export interface ExampleValue {
   summary?: string;
   description?: string;
   value: unknown;
+  /**
+   * A URL holding the example's value, from `externalValue`. Mutually exclusive with
+   * `value` per spec, but not enforced here -- if a document somehow wrote both, keeping
+   * both is more honest than silently preferring one. Never fetched: apibox renders it as
+   * a link, not as the value it points to.
+   */
+  externalValue?: string;
 }
 
 /** One field of a protocol {@link BindingInfo}, in declaration order. */
@@ -270,6 +282,8 @@ export interface TagInfo {
    */
   parent?: string;
   kind?: string;
+  /** `x-*` specification extensions found directly on this Tag Object, in declaration order. */
+  extensions?: Array<{ key: string; value: unknown }>;
 }
 
 /** A single entry in the sidebar. */
@@ -394,6 +408,19 @@ export interface MediaTypeEncoding {
   /** As {@link Parameter.explode}. */
   explode?: { value: boolean; declared: boolean };
   allowReserved?: boolean;
+  /**
+   * 3.2: when the encoded property is itself an array, the schema each item must satisfy --
+   * distinct from the outer property's own schema, which types the array as a whole.
+   */
+  itemSchema?: SchemaNode;
+  /**
+   * 3.2: as {@link itemSchema}, but per-item encoding detail (its own contentType/headers/
+   * style/explode) rather than a schema, for the same array-of-encoded-items case. Modelled
+   * without `propertyName` -- an item has no property name of its own, only the array
+   * property does -- rather than reusing {@link MediaTypeEncoding} wholesale and leaving that
+   * field meaninglessly present.
+   */
+  itemEncoding?: Omit<MediaTypeEncoding, 'propertyName' | 'itemSchema' | 'itemEncoding'>;
 }
 
 export interface RequestBodyInfo {
@@ -515,6 +542,8 @@ export interface Operation {
    * own operations) by construction, not by depth-counting at parse time.
    */
   callbacks?: Callback[];
+  /** `x-*` specification extensions found directly on this Operation Object, in declaration order. */
+  extensions?: Array<{ key: string; value: unknown }>;
 }
 
 /**
@@ -551,6 +580,21 @@ export interface OpenApiDocument extends ApiDocumentBase {
    * document's `$id` -- both identify where the document itself claims to live.
    */
   selfUrl?: string;
+  /**
+   * The OpenAPI 3.1 root `webhooks` map: reusable, always-on Path Items describing requests
+   * the API sends unprompted (e.g. "order.shipped"), the mirror image of `paths` -- an
+   * inbound request the API receives versus an outbound one it initiates. Each entry reuses
+   * {@link Operation}; its `path` holds the webhook's name rather than a URL, since a webhook
+   * has no path (see the parser's comment for why that is the least-lossy stand-in).
+   * `undefined` when the document declared none, so a request/response-only API's document
+   * shows no empty "Webhooks" section.
+   */
+  webhooks?: Operation[];
+  /**
+   * `x-*` specification extensions found at the document root or on `info` (OpenAPI has no
+   * separate model for `info`, so its extensions land here too), in declaration order.
+   */
+  extensions?: Array<{ key: string; value: unknown }>;
 }
 
 /* -------------------------------------------------------------------------- */

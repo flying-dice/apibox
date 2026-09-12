@@ -1359,8 +1359,14 @@ async function parseOpenApi(raw, options = {}) {
   const tags = parseTags(dereferenced.tags);
   const servers = parseServers2(dereferenced.servers);
   const securitySchemes = parseSecuritySchemes(dereferenced);
-  const operations = parseOperations(dereferenced, names, servers, warnings);
+  const taken = new Set;
+  const operations = parseOperations(dereferenced, names, servers, warnings, taken);
+  const webhooks = parseWebhooks(dereferenced, names, servers, warnings, taken);
   const schemas = parseComponentSchemas(dereferenced, names);
+  const documentExtensions = [
+    ...parseExtensions2(dereferenced) ?? [],
+    ...parseExtensions2(info) ?? []
+  ];
   return {
     id: options.id ?? slugify(title),
     kind: "openapi",
@@ -1380,9 +1386,15 @@ async function parseOpenApi(raw, options = {}) {
     schemas,
     jsonSchemaDialect: declaredDialect,
     selfUrl: asString(dereferenced.$self),
-    nav: buildNav4(operations, tags, schemas),
-    warnings
+    nav: buildNav4(operations, tags, schemas, webhooks),
+    warnings,
+    webhooks: webhooks.length > 0 ? webhooks : undefined,
+    extensions: documentExtensions.length > 0 ? documentExtensions : undefined
   };
+}
+function parseExtensions2(record) {
+  const entries = Object.entries(record).filter(([key]) => isExtensionKey(key));
+  return entries.length > 0 ? entries.map(([key, value]) => ({ key, value })) : undefined;
 }
 function parseTags(raw) {
   return asArray(raw).map((entry) => asRecord(entry)).filter((entry) => Boolean(entry && asString(entry.name))).map((entry) => ({
@@ -1390,7 +1402,8 @@ function parseTags(raw) {
     description: asString(entry.description),
     externalDocs: parseExternalDocs(entry.externalDocs),
     parent: asString(entry.parent),
-    kind: asString(entry.kind)
+    kind: asString(entry.kind),
+    extensions: parseExtensions2(entry)
   }));
 }
 function parseServers2(raw) {
@@ -1409,7 +1422,8 @@ function parseServers2(raw) {
           description: asString(v.description),
           enum: asArray(v.enum).filter((e) => typeof e === "string")
         };
-      }) : undefined
+      }) : undefined,
+      extensions: parseExtensions2(entry)
     };
   });
 }
@@ -1460,13 +1474,12 @@ function parseSecuritySchemes(root) {
     };
   });
 }
-function parseOperations(root, names, documentServers, warnings) {
+function parseOperations(root, names, documentServers, warnings, taken) {
   const paths = asRecord(root.paths);
   if (!paths) {
     warnings.push("The document declares no paths.");
     return [];
   }
-  const taken = new Set;
   const operations = [];
   for (const [path, pathValue] of Object.entries(paths)) {
     const pathItem = asRecord(pathValue);
@@ -1477,6 +1490,23 @@ function parseOperations(root, names, documentServers, warnings) {
     }));
   }
   resolveLinkOperationRefs(operations);
+  return operations;
+}
+function parseWebhooks(root, names, documentServers, warnings, taken) {
+  const webhooksRecord = asRecord(root.webhooks);
+  if (!webhooksRecord)
+    return [];
+  const operations = [];
+  for (const [name, pathItemValue] of Object.entries(webhooksRecord)) {
+    if (isExtensionKey(name))
+      continue;
+    const pathItem = asRecord(pathItemValue);
+    if (!pathItem)
+      continue;
+    operations.push(...parsePathItemOperations(pathItem, names, documentServers, warnings, name, taken, {
+      parseCallbacks: true
+    }));
+  }
   return operations;
 }
 function parsePathItemOperations(pathItem, names, documentServers, warnings, path, taken, options) {
@@ -1503,7 +1533,8 @@ function parsePathItemOperations(pathItem, names, documentServers, warnings, pat
       requestBody: parseRequestBody(operationValue.requestBody, names),
       responses: parseResponses(operationValue.responses, names),
       security: parseSecurity(operationValue.security),
-      callbacks: options.parseCallbacks ? parseCallbacks(operationValue.callbacks, names, warnings, taken) : undefined
+      callbacks: options.parseCallbacks ? parseCallbacks(operationValue.callbacks, names, warnings, taken) : undefined,
+      extensions: parseExtensions2(operationValue)
     };
   };
   for (const method of METHODS) {
@@ -1703,34 +1734,39 @@ function parseEncoding(raw, names) {
   const encoding = asRecord(raw);
   if (!encoding)
     return;
-  const out = Object.entries(encoding).map(([propertyName, value]) => {
-    const entry = asRecord(value) ?? {};
-    const headers = asRecord(entry.headers);
-    const declaredStyle = asString(entry.style);
-    const style = declaredStyle ?? "form";
-    const declaredExplode = typeof entry.explode === "boolean" ? entry.explode : undefined;
-    const explode = declaredExplode ?? defaultExplode(style);
-    return {
-      propertyName,
-      contentType: asString(entry.contentType),
-      headers: headers ? Object.entries(headers).map(([name, headerValue]) => {
-        const header = asRecord(headerValue) ?? {};
-        const { schema, content } = parseSchemaOrContent(header, names);
-        return {
-          name,
-          description: asString(header.description),
-          required: header.required === true,
-          deprecated: header.deprecated === true,
-          schema,
-          content
-        };
-      }) : undefined,
-      style: { value: style, declared: declaredStyle !== undefined },
-      explode: { value: explode, declared: declaredExplode !== undefined },
-      allowReserved: entry.allowReserved === true ? true : undefined
-    };
-  });
+  const out = Object.entries(encoding).map(([propertyName, value]) => ({
+    propertyName,
+    ...parseEncodingDetail(asRecord(value) ?? {}, names)
+  }));
   return out.length > 0 ? out : undefined;
+}
+function parseEncodingDetail(entry, names) {
+  const headers = asRecord(entry.headers);
+  const declaredStyle = asString(entry.style);
+  const style = declaredStyle ?? "form";
+  const declaredExplode = typeof entry.explode === "boolean" ? entry.explode : undefined;
+  const explode = declaredExplode ?? defaultExplode(style);
+  const itemEncoding = asRecord(entry.itemEncoding);
+  return {
+    contentType: asString(entry.contentType),
+    headers: headers ? Object.entries(headers).map(([name, headerValue]) => {
+      const header = asRecord(headerValue) ?? {};
+      const { schema, content } = parseSchemaOrContent(header, names);
+      return {
+        name,
+        description: asString(header.description),
+        required: header.required === true,
+        deprecated: header.deprecated === true,
+        schema,
+        content
+      };
+    }) : undefined,
+    style: { value: style, declared: declaredStyle !== undefined },
+    explode: { value: explode, declared: declaredExplode !== undefined },
+    allowReserved: entry.allowReserved === true ? true : undefined,
+    itemSchema: entry.itemSchema !== undefined ? normaliseSchema(entry.itemSchema, { names }) : undefined,
+    itemEncoding: itemEncoding ? parseEncodingDetail(itemEncoding, names) : undefined
+  };
 }
 function parseExamples2(holder) {
   const out = [];
@@ -1744,7 +1780,8 @@ function parseExamples2(holder) {
         name,
         summary: asString(example.summary),
         description: asString(example.description),
-        value: "value" in example ? example.value : ("dataValue" in example) ? example.dataValue : example.serializedValue
+        value: "value" in example ? example.value : ("dataValue" in example) ? example.dataValue : example.serializedValue,
+        externalValue: asString(example.externalValue)
       });
     }
   }
@@ -1753,7 +1790,7 @@ function parseExamples2(holder) {
   }
   return out.length > 0 ? out : undefined;
 }
-function buildNav4(operations, tags, schemas) {
+function buildNav4(operations, tags, schemas, webhooks) {
   const groups = new Map;
   for (const tag of tags)
     groups.set(tag.name, []);
@@ -1774,6 +1811,19 @@ function buildNav4(operations, tags, schemas) {
       id: uniqueId(`tag-${slugify(tag)}`, groupIds),
       label: tag,
       children: tagOperations.map((operation) => ({
+        id: operation.id,
+        label: operation.summary ?? `${operation.method} ${operation.path}`,
+        badge: operation.method,
+        badgeKind: operation.method.toLowerCase(),
+        deprecated: operation.deprecated
+      }))
+    });
+  }
+  if (webhooks.length > 0) {
+    nav.push({
+      id: "webhooks",
+      label: "Webhooks",
+      children: webhooks.map((operation) => ({
         id: operation.id,
         label: operation.summary ?? `${operation.method} ${operation.path}`,
         badge: operation.method,

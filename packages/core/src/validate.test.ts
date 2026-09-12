@@ -93,4 +93,60 @@ describe('runtime model validation', () => {
     cyclic.nav.push(cyclic);
     expect(isApiDocument(cyclic)).toBe(false);
   });
+
+  it('accepts webhooks as an optional array of operations, absent or present', () => {
+    expect(isApiDocument({ ...DOCUMENT, webhooks: undefined })).toBe(true);
+    expect(
+      isApiDocument({
+        ...DOCUMENT,
+        webhooks: [
+          {
+            id: 'petAdopted',
+            method: 'POST',
+            path: 'petAdopted',
+            deprecated: false,
+            tags: [],
+            servers: [],
+            parameters: [],
+            responses: [],
+          },
+        ],
+      }),
+    ).toBe(true);
+    expect(isApiDocument({ ...DOCUMENT, webhooks: [{ id: 'broken' }] })).toBe(false);
+  });
+
+  it('accepts an example with only externalValue, whose `value` key JSON serialization drops entirely', () => {
+    // parseExamples builds `{ value: undefined, externalValue: '...' }` for this case; once
+    // round-tripped through JSON (how the CLI persists a document), the `value` key is gone
+    // outright rather than present-and-undefined -- `'value' in value` alone would reject it.
+    expect(
+      isApiDocument({
+        ...DOCUMENT,
+        operations: [
+          {
+            id: 'listPets',
+            method: 'GET',
+            path: '/pets',
+            deprecated: false,
+            tags: [],
+            servers: [],
+            parameters: [],
+            responses: [
+              {
+                status: '200',
+                headers: [],
+                content: [
+                  {
+                    contentType: 'application/json',
+                    examples: [{ name: 'remote', externalValue: 'https://example.com/x.json' }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      }),
+    ).toBe(true);
+  });
 });

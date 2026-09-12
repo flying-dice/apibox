@@ -275,6 +275,24 @@ describe('SchemaViewer', () => {
     );
   });
 
+  it('distinguishes a closed schema from one that never mentioned additionalProperties', () => {
+    // `false` is a real assertion ("no extra properties allowed"); an unspecified schema
+    // must not look the same on screen.
+    render(SchemaViewer, {
+      schema: { types: ['object'], allowsAdditionalProperties: false },
+      testId: 'closed',
+    });
+    expect(screen.getByTestId('closed-root-closed-additional-properties')).toHaveTextContent(
+      'no additional properties',
+    );
+
+    render(SchemaViewer, {
+      schema: { types: ['object'] },
+      testId: 'open',
+    });
+    expect(screen.queryByTestId('open-closed-additional-properties')).not.toBeInTheDocument();
+  });
+
   it('renders if/then/else, contains and propertyNames as their own branches', () => {
     render(SchemaViewer, {
       schema: {

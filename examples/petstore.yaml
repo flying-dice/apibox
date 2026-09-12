@@ -1,4 +1,5 @@
 openapi: 3.1.0
+x-internal: true
 info:
   title: Petstore
   version: 1.4.0
@@ -14,14 +15,17 @@ info:
   license:
     name: MIT
     identifier: MIT
+  x-info-badge: beta
 servers:
   - url: https://api.example.com/v1
     description: Production
+    x-region: eu
   - url: https://staging.api.example.com/v1
     description: Staging
 tags:
   - name: pets
     description: Everything about the animals in the store.
+    x-tag-color: green
   - name: store
     description: Orders and inventory.
 security:
@@ -33,6 +37,7 @@ paths:
       summary: List pets
       description: Returns a paginated list of pets, optionally filtered by tag.
       tags: [pets]
+      x-rate-limit: 100
       parameters:
         - name: limit
           in: query
@@ -82,6 +87,9 @@ paths:
                     - id: 2
                       name: Whiskers
                       status: pending
+                remote:
+                  summary: A larger fixture, hosted rather than inlined
+                  externalValue: https://example.com/examples/pets.json
         '400': { $ref: '#/components/responses/BadRequest' }
     post:
       operationId: createPet
@@ -108,9 +116,18 @@ paths:
               properties:
                 name: { type: string, minLength: 1 }
                 photo: { type: string, format: binary, description: A photo of the pet. }
+                photos:
+                  type: array
+                  description: Additional photos, uploaded alongside the primary one.
+                  items: { type: string, format: binary }
             encoding:
               photo:
                 contentType: image/png, image/jpeg
+              photos:
+                contentType: multipart/mixed
+                itemSchema: { type: string, format: binary }
+                itemEncoding:
+                  contentType: image/png
       responses:
         '201':
           description: The created pet.
@@ -189,6 +206,23 @@ paths:
               schema:
                 type: object
                 additionalProperties: { type: integer, format: int32 }
+webhooks:
+  petAdopted:
+    post:
+      operationId: petAdopted
+      summary: A pet was adopted
+      description: >-
+        Sent to the configured webhook URL whenever a pet's status changes to `adopted`.
+        Reusable, always-on -- unlike `callbacks`, this is not tied to a specific request.
+      tags: [pets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Pet' }
+      responses:
+        '200':
+          description: Acknowledged.
 components:
   securitySchemes:
     apiKey:
@@ -264,6 +298,17 @@ components:
         species: { type: string, enum: [dog] }
         name: { type: string }
         breed: { type: string }
+    Address:
+      type: object
+      description: >-
+        A postal address. Closed: the API rejects any property beyond the three listed
+        here, unlike most other schemas in this document which simply don't mention the
+        keyword.
+      additionalProperties: false
+      properties:
+        street: { type: string }
+        city: { type: string }
+        postalCode: { type: string }
     NewPet:
       type: object
       description: The fields accepted when creating a pet.

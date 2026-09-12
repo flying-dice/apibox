@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { MediaTypeBody } from '@apibox/core';
+  import { schemaTypeLabel } from '@apibox/core';
   import Chip from '../atoms/Chip.svelte';
   import TabBar from '../molecules/TabBar.svelte';
   import ExampleViewer from './ExampleViewer.svelte';
@@ -79,6 +80,23 @@
                     label="allowReserved"
                     value="true"
                     testId="{testId}-encoding-{entry.propertyName}-allow-reserved"
+                  />
+                {/if}
+                {#if entry.itemSchema}
+                  <!-- 3.2: the per-item schema when this property's value is itself an array of encoded items. -->
+                  <Chip
+                    label="item type"
+                    value={schemaTypeLabel(entry.itemSchema)}
+                    code
+                    testId="{testId}-encoding-{entry.propertyName}-item-schema"
+                  />
+                {/if}
+                {#if entry.itemEncoding?.contentType}
+                  <Chip
+                    label="item content type"
+                    value={entry.itemEncoding.contentType}
+                    code
+                    testId="{testId}-encoding-{entry.propertyName}-item-content-type"
                   />
                 {/if}
               </div>

@@ -1,12 +1,12 @@
 ---
-column: doing
+column: review
 labels: [core, ui, openapi]
 priority: high
 package: core
 agent: claude
-live: true
-status: Webhooks, externalValue, encoding items, document extensions
-progress: 10
+live: false
+status: Webhooks and the last parse-layer gaps closed
+progress: 100
 updatedAt: 2026-09-12T05:40:00.000Z
 ---
 # OpenAPI: webhooks and the last parse-layer gaps
@@ -32,9 +32,17 @@ The rest are small:
 
 ## Checklist
 
-- [ ] `webhooks` parsed, reusing the existing path-item operation helper
-- [ ] `webhooks` rendered as its own top-level section
-- [ ] `Example.externalValue` read and rendered as a link
-- [ ] `Encoding.itemSchema` / `itemEncoding`
-- [ ] Document/Info/Operation/Tag/Server `x-*` extensions captured and rendered
-- [ ] Closed schemas visibly distinguished from unspecified ones
+- [x] `webhooks` parsed, reusing the existing path-item operation helper
+- [x] `webhooks` rendered as its own top-level section
+- [x] `Example.externalValue` read and rendered as a link
+- [x] `Encoding.itemSchema` / `itemEncoding`
+- [x] Document/Info/Operation/Tag/Server `x-*` extensions captured and rendered
+- [x] Closed schemas visibly distinguished from unspecified ones
+
+## Comments
+
+- **claude** (2026-09-12T07:00:00.000Z): All five landed and all five render — nothing left modelled-only. `webhooks` reuses `parsePathItemOperations` rather than a second path-item walker, shares the operation id set with `paths` so ids stay unique across both, and gets its own flat nav group.
+- **claude** (2026-09-12T07:00:00.000Z): A webhook has no URL, so `Operation.path` holds the webhook's own name. That is the identity a reader already has for it, and it matches how a callback already carries its runtime expression — no fabricated path.
+- **claude** (2026-09-12T07:00:00.000Z): Found a real bug on the way, not a hypothetical one: `isExample` in packages/core/src/validate.ts tested `value in value`, which rejects an externalValue-only example outright, because JSON serialisation drops an absent `value` key entirely. It surfaced in the e2e run rather than a unit test, since it only bites after a document round-trips through the manifest.
+- **claude** (2026-09-12T07:00:00.000Z): Verified myself — typecheck 10x "0 ERRORS", lint clean over 140 files, core 172 to 181, ui 187 to 188, cli 7, extension 17, viewer 20, e2e 28.
+- **claude** (2026-09-12T07:00:00.000Z): Carried deliberately, with reasoning: webhook operationRef links are not resolved against `#/webhooks/...` pointers. Closing it means a second pointer-format branch in `resolveLinkOperationRefs` for a case no fixture demonstrates. Recorded in a code comment rather than silently skipped.

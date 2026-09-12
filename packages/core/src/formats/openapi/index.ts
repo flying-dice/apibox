@@ -78,8 +78,19 @@ export async function parseOpenApi(
   const tags = parseTags(dereferenced.tags);
   const servers = parseServers(dereferenced.servers);
   const securitySchemes = parseSecuritySchemes(dereferenced);
-  const operations = parseOperations(dereferenced, names, servers, warnings);
+  // Shared across `paths` and `webhooks` so an id collision between the two (e.g. a webhook
+  // named the same as a path's slug) is still deduplicated document-wide.
+  const taken = new Set<string>();
+  const operations = parseOperations(dereferenced, names, servers, warnings, taken);
+  const webhooks = parseWebhooks(dereferenced, names, servers, warnings, taken);
   const schemas = parseComponentSchemas(dereferenced, names);
+  // Root-level extensions first, then info-level -- OpenAPI has no separate model for
+  // `info` here (its fields are flattened onto the document directly), so its extensions
+  // are folded into the same list rather than invented a second field for.
+  const documentExtensions = [
+    ...(parseExtensions(dereferenced) ?? []),
+    ...(parseExtensions(info) ?? []),
+  ];
 
   return {
     id: options.id ?? slugify(title),
@@ -101,9 +112,19 @@ export async function parseOpenApi(
     jsonSchemaDialect: declaredDialect,
     // 3.2: the document's own canonical URI, the same idea as a JSON Schema `$id`.
     selfUrl: asString(dereferenced.$self),
-    nav: buildNav(operations, tags, schemas),
+    nav: buildNav(operations, tags, schemas, webhooks),
     warnings,
+    webhooks: webhooks.length > 0 ? webhooks : undefined,
+    extensions: documentExtensions.length > 0 ? documentExtensions : undefined,
   };
+}
+
+/** `x-*` specification extensions found directly on `record`, in declaration order. */
+function parseExtensions(
+  record: Record<string, unknown>,
+): Array<{ key: string; value: unknown }> | undefined {
+  const entries = Object.entries(record).filter(([key]) => isExtensionKey(key));
+  return entries.length > 0 ? entries.map(([key, value]) => ({ key, value })) : undefined;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -119,6 +140,7 @@ function parseTags(raw: unknown): TagInfo[] {
       // 3.2 nested tags -- see TagInfo.parent's doc comment for why navigation stays flat.
       parent: asString(entry.parent),
       kind: asString(entry.kind),
+      extensions: parseExtensions(entry),
     }));
 }
 
@@ -144,6 +166,7 @@ function parseServers(raw: unknown): ServerInfo[] {
               };
             })
           : undefined,
+        extensions: parseExtensions(entry),
       } satisfies ServerInfo;
     });
 }
@@ -205,6 +228,7 @@ function parseOperations(
   names: Map<object, string>,
   documentServers: ServerInfo[],
   warnings: string[],
+  taken: Set<string>,
 ): Operation[] {
   const paths = asRecord(root.paths);
   if (!paths) {
@@ -212,7 +236,6 @@ function parseOperations(
     return [];
   }
 
-  const taken = new Set<string>();
   const operations: Operation[] = [];
 
   for (const [path, pathValue] of Object.entries(paths)) {
@@ -230,6 +253,47 @@ function parseOperations(
   // (top-level and callback) has an id to match against.
   resolveLinkOperationRefs(operations);
 
+  return operations;
+}
+
+/**
+ * Parse the OpenAPI 3.1 root `webhooks` map: reusable, always-on Path Items describing
+ * requests the API sends unprompted (e.g. "a payment was captured"), the mirror image of
+ * `paths` -- an outbound request the API initiates rather than an inbound one it serves.
+ * Reuses {@link parsePathItemOperations} since a webhook's Path Item has the identical
+ * shape; only the key differs, a name rather than a URL.
+ */
+function parseWebhooks(
+  root: Record<string, unknown>,
+  names: Map<object, string>,
+  documentServers: ServerInfo[],
+  warnings: string[],
+  taken: Set<string>,
+): Operation[] {
+  const webhooksRecord = asRecord(root.webhooks);
+  if (!webhooksRecord) return [];
+
+  const operations: Operation[] = [];
+  for (const [name, pathItemValue] of Object.entries(webhooksRecord)) {
+    if (isExtensionKey(name)) continue;
+    const pathItem = asRecord(pathItemValue);
+    if (!pathItem) continue;
+    operations.push(
+      // A webhook has no URL, so `path` has no meaning for it -- the same situation a
+      // callback's runtime expression is in (see parseCallbacks below). The webhook's own
+      // name stands in instead, which is also the identity a reader already has for it.
+      ...parsePathItemOperations(pathItem, names, documentServers, warnings, name, taken, {
+        parseCallbacks: true,
+      }),
+    );
+  }
+
+  // Deliberately not fed through resolveLinkOperationRefs: that function's pointer format
+  // (`#/paths/{path}/{method}`) does not describe a webhook (which would need `#/webhooks/
+  // {name}/{method}`), and building both formats for one shared pointer map risks a false
+  // match if a webhook name happens to equal a path. A link inside a webhook that points at
+  // another webhook by operationRef is not resolved -- a narrower gap than not having
+  // webhooks at all, and one this card's brief did not ask to close.
   return operations;
 }
 
@@ -287,6 +351,7 @@ function parsePathItemOperations(
       callbacks: options.parseCallbacks
         ? parseCallbacks(operationValue.callbacks, names, warnings, taken)
         : undefined,
+      extensions: parseExtensions(operationValue),
     };
   };
 
@@ -572,38 +637,54 @@ function parseEncoding(raw: unknown, names: Map<object, string>): MediaTypeEncod
   const encoding = asRecord(raw);
   if (!encoding) return undefined;
 
-  const out = Object.entries(encoding).map(([propertyName, value]) => {
-    const entry = asRecord(value) ?? {};
-    const headers = asRecord(entry.headers);
-    const declaredStyle = asString(entry.style);
-    const style = declaredStyle ?? 'form';
-    const declaredExplode = typeof entry.explode === 'boolean' ? entry.explode : undefined;
-    const explode = declaredExplode ?? defaultExplode(style);
-
-    return {
-      propertyName,
-      contentType: asString(entry.contentType),
-      headers: headers
-        ? Object.entries(headers).map(([name, headerValue]) => {
-            const header = asRecord(headerValue) ?? {};
-            const { schema, content } = parseSchemaOrContent(header, names);
-            return {
-              name,
-              description: asString(header.description),
-              required: header.required === true,
-              deprecated: header.deprecated === true,
-              schema,
-              content,
-            } satisfies ResponseHeader;
-          })
-        : undefined,
-      style: { value: style, declared: declaredStyle !== undefined },
-      explode: { value: explode, declared: declaredExplode !== undefined },
-      allowReserved: entry.allowReserved === true ? true : undefined,
-    } satisfies MediaTypeEncoding;
-  });
+  const out = Object.entries(encoding).map(([propertyName, value]) => ({
+    propertyName,
+    ...parseEncodingDetail(asRecord(value) ?? {}, names),
+  }));
 
   return out.length > 0 ? out : undefined;
+}
+
+/**
+ * The fields an Encoding Object carries beyond its map key -- shared between a top-level
+ * `encoding` entry (keyed by property name) and its 3.2 `itemEncoding` (which has no
+ * property name of its own; see {@link MediaTypeEncoding.itemEncoding}).
+ */
+function parseEncodingDetail(
+  entry: Record<string, unknown>,
+  names: Map<object, string>,
+): Omit<MediaTypeEncoding, 'propertyName'> {
+  const headers = asRecord(entry.headers);
+  const declaredStyle = asString(entry.style);
+  const style = declaredStyle ?? 'form';
+  const declaredExplode = typeof entry.explode === 'boolean' ? entry.explode : undefined;
+  const explode = declaredExplode ?? defaultExplode(style);
+  const itemEncoding = asRecord(entry.itemEncoding);
+
+  return {
+    contentType: asString(entry.contentType),
+    headers: headers
+      ? Object.entries(headers).map(([name, headerValue]) => {
+          const header = asRecord(headerValue) ?? {};
+          const { schema, content } = parseSchemaOrContent(header, names);
+          return {
+            name,
+            description: asString(header.description),
+            required: header.required === true,
+            deprecated: header.deprecated === true,
+            schema,
+            content,
+          } satisfies ResponseHeader;
+        })
+      : undefined,
+    style: { value: style, declared: declaredStyle !== undefined },
+    explode: { value: explode, declared: declaredExplode !== undefined },
+    allowReserved: entry.allowReserved === true ? true : undefined,
+    // 3.2: per-item detail for a property that is itself an array of encoded items.
+    itemSchema:
+      entry.itemSchema !== undefined ? normaliseSchema(entry.itemSchema, { names }) : undefined,
+    itemEncoding: itemEncoding ? parseEncodingDetail(itemEncoding, names) : undefined,
+  };
 }
 
 /**
@@ -631,6 +712,8 @@ function parseExamples(holder: Record<string, unknown>): ExampleValue[] | undefi
             : 'dataValue' in example
               ? example.dataValue
               : example.serializedValue,
+        // An example held at a URL instead of inlined. Kept as a link, never fetched.
+        externalValue: asString(example.externalValue),
       });
     }
   }
@@ -646,7 +729,12 @@ function parseExamples(holder: Record<string, unknown>): ExampleValue[] | undefi
  * Build the sidebar: operations grouped by their first tag, in the order the document's
  * `tags` array declares, with untagged operations collected at the end.
  */
-function buildNav(operations: Operation[], tags: TagInfo[], schemas: SchemaNode[]): NavNode[] {
+function buildNav(
+  operations: Operation[],
+  tags: TagInfo[],
+  schemas: SchemaNode[],
+  webhooks: Operation[],
+): NavNode[] {
   const groups = new Map<string, Operation[]>();
   for (const tag of tags) groups.set(tag.name, []);
 
@@ -665,6 +753,23 @@ function buildNav(operations: Operation[], tags: TagInfo[], schemas: SchemaNode[
       id: uniqueId(`tag-${slugify(tag)}`, groupIds),
       label: tag,
       children: tagOperations.map((operation) => ({
+        id: operation.id,
+        label: operation.summary ?? `${operation.method} ${operation.path}`,
+        badge: operation.method,
+        badgeKind: operation.method.toLowerCase(),
+        deprecated: operation.deprecated,
+      })),
+    });
+  }
+
+  // A flat "Webhooks" group, not sub-grouped by tag the way Operations is above -- a
+  // webhook-first document is typically small enough that a single collapsed list reads
+  // better than another layer of grouping (see the density note on card 38's brief).
+  if (webhooks.length > 0) {
+    nav.push({
+      id: 'webhooks',
+      label: 'Webhooks',
+      children: webhooks.map((operation) => ({
         id: operation.id,
         label: operation.summary ?? `${operation.method} ${operation.path}`,
         badge: operation.method,

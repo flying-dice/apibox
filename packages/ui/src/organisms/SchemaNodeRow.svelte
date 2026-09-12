@@ -97,7 +97,7 @@
       </div>
     </div>
 
-    {#if schema.dependentRequired?.length || schema.extensions?.length}
+    {#if schema.dependentRequired?.length || schema.extensions?.length || schema.allowsAdditionalProperties === false || schema.allowsUnevaluatedProperties === false || schema.allowsUnevaluatedItems === false}
       <div class="meta">
         {#each schema.dependentRequired ?? [] as entry (entry.property)}
           <Chip
@@ -106,6 +106,26 @@
             testId="{testId}-dependent-required-{entry.property}"
           />
         {/each}
+        {#if schema.allowsAdditionalProperties === false}
+          <!--
+            `false` is a real assertion ("no extra properties allowed"), not the same thing
+            as never mentioning the keyword -- see SchemaNode.allowsAdditionalProperties'
+            doc comment. Without this, a closed schema looked identical to an unspecified one.
+          -->
+          <Badge tone="neutral" variant="outline" small testId="{testId}-closed-additional-properties">
+            closed: no additional properties
+          </Badge>
+        {/if}
+        {#if schema.allowsUnevaluatedProperties === false}
+          <Badge tone="neutral" variant="outline" small testId="{testId}-closed-unevaluated-properties">
+            closed: no unevaluated properties
+          </Badge>
+        {/if}
+        {#if schema.allowsUnevaluatedItems === false}
+          <Badge tone="neutral" variant="outline" small testId="{testId}-closed-unevaluated-items">
+            closed: no unevaluated items
+          </Badge>
+        {/if}
         {#each schema.extensions ?? [] as extension (extension.key)}
           <Chip
             label={extension.key}

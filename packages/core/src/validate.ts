@@ -113,7 +113,10 @@ function isExample(value: unknown): boolean {
     isRecord(value) &&
     isString(value.name) &&
     hasOptionalStrings(value, ['summary', 'description']) &&
-    'value' in value
+    // An example given only by `externalValue` legitimately has no `value` key at all --
+    // serializing `{ value: undefined }` drops the key entirely, so requiring it
+    // unconditionally would reject exactly the externally-hosted examples card 38 added.
+    ('value' in value || isString(value.externalValue))
   );
 }
 
@@ -446,7 +449,9 @@ export function isApiDocument(value: unknown, expectedId?: string): value is Api
         Array.isArray(value.securitySchemes) &&
         value.securitySchemes.every(isSecurityScheme) &&
         (value.security === undefined ||
-          (Array.isArray(value.security) && value.security.every(isSecurityRequirement)))
+          (Array.isArray(value.security) && value.security.every(isSecurityRequirement))) &&
+        (value.webhooks === undefined ||
+          (Array.isArray(value.webhooks) && value.webhooks.every(isOpenApiOperation)))
       );
     case 'asyncapi':
       return (

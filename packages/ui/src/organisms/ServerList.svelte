@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { ServerInfo } from '@apibox/core';
+  import Chip from '../atoms/Chip.svelte';
   import Code from '../atoms/Code.svelte';
   import KeyValueRow from '../molecules/KeyValueRow.svelte';
   import BindingList from './BindingList.svelte';
@@ -42,6 +43,18 @@
             </p>
           {/if}
           <BindingList bindings={server.bindings} testId="{testId}-{index}-bindings" label="Server" />
+          {#if server.extensions?.length}
+            <div class="extensions" data-testid="{testId}-{index}-extensions">
+              {#each server.extensions as extension (extension.key)}
+                <Chip
+                  label={extension.key}
+                  value={typeof extension.value === 'string' ? extension.value : JSON.stringify(extension.value)}
+                  code
+                  testId="{testId}-{index}-extension-{extension.key}"
+                />
+              {/each}
+            </div>
+          {/if}
         </article>
       {/each}
     </div>
@@ -76,7 +89,8 @@
     color: var(--apibox-fg-muted);
   }
 
-  .security {
+  .security,
+  .extensions {
     display: flex;
     flex-wrap: wrap;
     gap: var(--apibox-space-2);

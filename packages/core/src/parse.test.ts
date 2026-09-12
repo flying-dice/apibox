@@ -512,9 +512,11 @@ describe('OpenAPI', () => {
     expect(header?.schema?.types).toEqual(['object']);
   });
 
-  it('builds a nav grouped by tag, in document tag order, with a Schemas group', async () => {
+  it('builds a nav grouped by tag, in document tag order, with a Webhooks and a Schemas group', async () => {
+    // The fixture gained a `webhooks` entry for card 38 -- Webhooks sits between the
+    // tag groups and Schemas, mirroring buildNav's own push order.
     const doc = await load();
-    expect(doc.nav.map((n) => n.label)).toEqual(['pets', 'store', 'Schemas']);
+    expect(doc.nav.map((n) => n.label)).toEqual(['pets', 'store', 'Webhooks', 'Schemas']);
     expect(doc.nav[0]?.children?.map((c) => c.badge)).toEqual(['GET', 'POST', 'GET', 'DELETE']);
     expect(doc.nav[0]?.children?.at(-1)?.deprecated).toBe(true);
   });
@@ -1154,6 +1156,170 @@ describe('OpenAPI', () => {
       const pet = doc.schemas.find((s) => s.name === 'Pet');
       expect(pet?.xml).toEqual({ name: 'pet', namespace: 'https://example.com/schema' });
       expect(pet?.properties?.[0]?.xml).toEqual({ attribute: true });
+    });
+  });
+
+  describe('webhooks and the other card-38 gaps', () => {
+    it('reads webhooks as operations, reachable by name and method', async () => {
+      const doc = (await parseApiDocument({
+        openapi: '3.1.0',
+        info: { title: 'W', version: '1.0.0' },
+        paths: {},
+        webhooks: {
+          'order.shipped': {
+            post: {
+              operationId: 'orderShipped',
+              summary: 'A new order has been shipped',
+              requestBody: {
+                content: { 'application/json': { schema: { type: 'object' } } },
+              },
+              responses: { '200': { description: 'ok' } },
+            },
+          },
+        },
+      })) as OpenApiDocument;
+
+      expect(doc.operations).toEqual([]);
+      expect(doc.webhooks).toHaveLength(1);
+      const webhook = doc.webhooks?.find((w) => w.operationId === 'orderShipped');
+      expect(webhook).toMatchObject({ method: 'POST', path: 'order.shipped' });
+
+      // Reachable from navigation the same way an operation is.
+      const webhooksNav = doc.nav.find((n) => n.id === 'webhooks');
+      expect(webhooksNav?.children?.map((c) => c.id)).toEqual([webhook?.id]);
+    });
+
+    it('leaves webhooks undefined when the document declares none', async () => {
+      const doc = (await parseApiDocument({
+        openapi: '3.1.0',
+        info: { title: 'NoHooks', version: '1.0.0' },
+        paths: {},
+      })) as OpenApiDocument;
+
+      expect(doc.webhooks).toBeUndefined();
+      expect(doc.nav.find((n) => n.id === 'webhooks')).toBeUndefined();
+    });
+
+    it('reads Example.externalValue and keeps it distinct from an inline value', async () => {
+      const doc = (await parseApiDocument({
+        openapi: '3.1.0',
+        info: { title: 'Ext', version: '1.0.0' },
+        paths: {
+          '/things': {
+            get: {
+              operationId: 'listThings',
+              responses: {
+                '200': {
+                  description: 'ok',
+                  content: {
+                    'application/json': {
+                      schema: { type: 'object' },
+                      examples: {
+                        remote: { externalValue: 'https://example.com/examples/thing.json' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      })) as OpenApiDocument;
+
+      const example = doc.operations[0]?.responses[0]?.content[0]?.examples?.find(
+        (e) => e.name === 'remote',
+      );
+      expect(example?.externalValue).toBe('https://example.com/examples/thing.json');
+      expect(example?.value).toBeUndefined();
+    });
+
+    it('reads Encoding.itemSchema and itemEncoding for an array-of-encoded-items property', async () => {
+      const doc = (await parseApiDocument({
+        openapi: '3.2.0',
+        info: { title: 'Enc', version: '1.0.0' },
+        paths: {
+          '/upload': {
+            post: {
+              operationId: 'upload',
+              requestBody: {
+                content: {
+                  'multipart/form-data': {
+                    schema: { type: 'object' },
+                    encoding: {
+                      attachments: {
+                        contentType: 'application/octet-stream',
+                        itemSchema: { type: 'string', format: 'binary' },
+                        itemEncoding: { contentType: 'image/png' },
+                      },
+                    },
+                  },
+                },
+              },
+              responses: { '200': { description: 'ok' } },
+            },
+          },
+        },
+      })) as OpenApiDocument;
+
+      const encoding = doc.operations[0]?.requestBody?.content[0]?.encoding?.[0];
+      expect(encoding?.itemSchema?.format).toBe('binary');
+      expect(encoding?.itemEncoding?.contentType).toBe('image/png');
+    });
+
+    it('captures document-level x-* extensions, mirroring JsonRpcDocument.extensions', async () => {
+      const doc = (await parseApiDocument({
+        openapi: '3.1.0',
+        info: { title: 'Extended', version: '1.0.0', 'x-info-badge': 'beta' },
+        'x-internal': true,
+        paths: {},
+      })) as OpenApiDocument;
+
+      expect(doc.extensions).toEqual([
+        { key: 'x-internal', value: true },
+        { key: 'x-info-badge', value: 'beta' },
+      ]);
+    });
+
+    it('captures operation, tag and server x-* extensions', async () => {
+      const doc = (await parseApiDocument({
+        openapi: '3.1.0',
+        info: { title: 'Extended', version: '1.0.0' },
+        tags: [{ name: 'pets', 'x-tag-color': 'green' }],
+        servers: [{ url: 'https://api.example.com', 'x-region': 'eu' }],
+        paths: {
+          '/pets': {
+            get: {
+              operationId: 'listPets',
+              tags: ['pets'],
+              'x-rate-limit': 100,
+              responses: { '200': { description: 'ok' } },
+            },
+          },
+        },
+      })) as OpenApiDocument;
+
+      expect(doc.tags[0]?.extensions).toEqual([{ key: 'x-tag-color', value: 'green' }]);
+      expect(doc.servers[0]?.extensions).toEqual([{ key: 'x-region', value: 'eu' }]);
+      expect(doc.operations[0]?.extensions).toEqual([{ key: 'x-rate-limit', value: 100 }]);
+    });
+
+    it('distinguishes a closed schema (additionalProperties: false) from an unspecified one', async () => {
+      const doc = (await parseApiDocument({
+        openapi: '3.1.0',
+        info: { title: 'Closed', version: '1.0.0' },
+        paths: {},
+        components: {
+          schemas: {
+            Closed: { type: 'object', additionalProperties: false },
+            Open: { type: 'object' },
+          },
+        },
+      })) as OpenApiDocument;
+
+      const closed = doc.schemas.find((s) => s.name === 'Closed');
+      const open = doc.schemas.find((s) => s.name === 'Open');
+      expect(closed?.allowsAdditionalProperties).toBe(false);
+      expect(open?.allowsAdditionalProperties).toBeUndefined();
     });
   });
 });

@@ -2,6 +2,7 @@
   import type { Operation, SecurityRequirement } from '@apibox/core';
   import CollapsibleCard from '../molecules/CollapsibleCard.svelte';
   import Badge from '../atoms/Badge.svelte';
+  import Chip from '../atoms/Chip.svelte';
   import Code from '../atoms/Code.svelte';
   import HttpMethod from '../atoms/HttpMethod.svelte';
   import Link from '../atoms/Link.svelte';
@@ -64,6 +65,19 @@
   {#if operation.requestBody}<RequestBody body={operation.requestBody} testId="{testId}-request" />{/if}
   <ResponseList responses={operation.responses} testId="{testId}-responses" />
 
+  {#if operation.extensions?.length}
+    <div class="extensions" data-testid="{testId}-extensions">
+      {#each operation.extensions as extension (extension.key)}
+        <Chip
+          label={extension.key}
+          value={typeof extension.value === 'string' ? extension.value : JSON.stringify(extension.value)}
+          code
+          testId="{testId}-extension-{extension.key}"
+        />
+      {/each}
+    </div>
+  {/if}
+
   {#if operation.callbacks?.length}
     <section class="callbacks" aria-labelledby="{testId}-callbacks-title" data-testid="{testId}-callbacks">
       <h4 id="{testId}-callbacks-title">Callbacks</h4>
@@ -110,6 +124,12 @@
     display: flex;
     flex-direction: column;
     gap: var(--apibox-space-3);
+  }
+
+  .extensions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--apibox-space-2);
   }
 
   .callback-heading {

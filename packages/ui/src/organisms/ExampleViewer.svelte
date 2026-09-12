@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { ExampleValue } from '@apibox/core';
+  import Link from '../atoms/Link.svelte';
   import { formatJson } from '../format-json.js';
   import CodeBlock from '../molecules/CodeBlock.svelte';
   import TabBar from '../molecules/TabBar.svelte';
@@ -39,13 +40,26 @@
     >
       {#if selected.summary}<p class="summary">{selected.summary}</p>{/if}
       {#if selected.description}<p class="description">{selected.description}</p>{/if}
-      <CodeBlock
-        code={formatJson(selected.value, 'This example could not be serialized as JSON.')}
-        language="json"
-        label={selected.name}
-        maxLines={18}
-        testId="{testId}-code"
-      />
+      {#if selected.value !== undefined}
+        <CodeBlock
+          code={formatJson(selected.value, 'This example could not be serialized as JSON.')}
+          language="json"
+          label={selected.name}
+          maxLines={18}
+          testId="{testId}-code"
+        />
+      {:else if selected.externalValue}
+        <!--
+          `externalValue` points at a URL rather than carrying the value inline. Rendered
+          as a link, never fetched -- apibox has no business making network calls on a
+          reader's behalf while they browse documentation.
+        -->
+        <p class="external" data-testid="{testId}-external-value">
+          <Link href={selected.externalValue} testId="{testId}-external-value-link">
+            {selected.externalValue}
+          </Link>
+        </p>
+      {/if}
     </div>
   </section>
 {/if}
@@ -68,5 +82,9 @@
 
   .description {
     color: var(--apibox-fg-muted);
+  }
+
+  .external {
+    margin: 0;
   }
 </style>

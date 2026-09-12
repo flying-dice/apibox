@@ -5,6 +5,7 @@
   import SchemaCatalog from '../../organisms/SchemaCatalog.svelte';
   import SecuritySchemes from '../../organisms/SecuritySchemes.svelte';
   import ServerList from '../../organisms/ServerList.svelte';
+  import Chip from '../../atoms/Chip.svelte';
   import Link from '../../atoms/Link.svelte';
   import KeyValueRow from '../../molecules/KeyValueRow.svelte';
   import { itemsByNavigation } from '../navigation-groups.js';
@@ -18,6 +19,7 @@
   const operationGroups = $derived(itemsByNavigation(document.nav, document.operations));
   const schemaNavigation = $derived(document.nav.find((node) => node.id === 'schemas'));
   const tagDescriptions = $derived(new Map(document.tags.map((tag) => [tag.name, tag.description])));
+  const tagExtensions = $derived(new Map(document.tags.map((tag) => [tag.name, tag.extensions])));
 </script>
 
 <article class="document" data-testid={testId}>
@@ -42,6 +44,20 @@
     </dl>
   {/if}
 
+  {#if document.extensions?.length}
+    <!-- Root/Info-level `x-*` extensions, chipped the same way SchemaNodeRow shows a schema's own. -->
+    <div class="extensions" data-testid="{testId}-extensions">
+      {#each document.extensions as extension (extension.key)}
+        <Chip
+          label={extension.key}
+          value={typeof extension.value === 'string' ? extension.value : JSON.stringify(extension.value)}
+          code
+          testId="{testId}-extension-{extension.key}"
+        />
+      {/each}
+    </div>
+  {/if}
+
   <ServerList servers={document.servers} testId="{testId}-servers" />
   <SecuritySchemes schemes={document.securitySchemes} testId="{testId}-security" />
 
@@ -59,6 +75,18 @@
               {tagDescriptions.get(group.node.label)}
             </p>
           {/if}
+          {#if tagExtensions.get(group.node.label)?.length}
+            <div class="extensions" data-testid="{testId}-{group.node.id}-extensions">
+              {#each tagExtensions.get(group.node.label) ?? [] as extension (extension.key)}
+                <Chip
+                  label={extension.key}
+                  value={typeof extension.value === 'string' ? extension.value : JSON.stringify(extension.value)}
+                  code
+                  testId="{testId}-{group.node.id}-extension-{extension.key}"
+                />
+              {/each}
+            </div>
+          {/if}
         </header>
         {#each group.items as operation (operation.id)}
           <OperationCard
@@ -71,12 +99,33 @@
     {/each}
   </section>
 
+  {#if document.webhooks?.length}
+    <!--
+      Same collapsed-row treatment as Operations (card 29/30's density constraint), just not
+      sub-grouped by tag -- a webhook-first document is small enough that one flat list reads
+      better than another layer of grouping. `OperationCard` is reused as-is: a webhook is
+      structurally an Operation, just keyed by name rather than a URL (see webhooks' parser
+      comment for why `path` holds the name).
+    -->
+    <section class="webhooks" aria-labelledby="{testId}-webhooks-title" data-testid="{testId}-webhooks">
+      <h2 id="{testId}-webhooks-title">Webhooks</h2>
+      {#each document.webhooks as webhook (webhook.id)}
+        <OperationCard
+          operation={webhook}
+          inheritedSecurity={document.security}
+          testId="{testId}-webhook-{webhook.id}"
+        />
+      {/each}
+    </section>
+  {/if}
+
   <SchemaCatalog schemas={document.schemas} navigation={schemaNavigation} testId="{testId}-schemas" />
 </article>
 
 <style>
   .document,
-  .operations {
+  .operations,
+  .webhooks {
     display: flex;
     flex-direction: column;
     gap: var(--apibox-space-5);
@@ -85,6 +134,18 @@
   .metadata {
     max-width: 44rem;
     margin: 0;
+  }
+
+  .extensions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--apibox-space-2);
+  }
+
+  .webhooks {
+    padding-top: var(--apibox-space-5);
+    border-top: 1px solid var(--apibox-border);
+    gap: 0;
   }
 
   /* No gap between rows: the hairline in CollapsibleCard carries the separation. */

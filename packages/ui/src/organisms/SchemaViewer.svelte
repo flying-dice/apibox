@@ -45,11 +45,14 @@
           schema.compositions?.length ||
           schema.circularRef ||
           schema.unresolvedRef ||
-          // As with `description`: without its own row, a root's `dependentRequired` or
-          // `x-*` extensions would have nowhere to render at all, since `SchemaNodeRow`
-          // only draws that meta block when it is not hidden.
+          // As with `description`: without its own row, a root's `dependentRequired`,
+          // `x-*` extensions, or closed-schema markers would have nowhere to render at all,
+          // since `SchemaNodeRow` only draws that meta block when it is not hidden.
           schema.dependentRequired?.length ||
           schema.extensions?.length ||
+          schema.allowsAdditionalProperties === false ||
+          schema.allowsUnevaluatedProperties === false ||
+          schema.allowsUnevaluatedItems === false ||
           schema.discriminator),
     ),
   );
