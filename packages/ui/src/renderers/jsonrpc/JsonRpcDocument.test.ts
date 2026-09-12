@@ -30,6 +30,10 @@ function document(overrides: Partial<JsonRpcDocumentModel> = {}): JsonRpcDocumen
     tags: [],
     schemas: [],
     contentDescriptors: [],
+    tagCatalog: [],
+    exampleCatalog: [],
+    examplePairingCatalog: [],
+    linkCatalog: [],
     warnings: [],
     nav: [
       {
@@ -92,5 +96,38 @@ describe('JsonRpcDocument', () => {
     ).not.toBeInTheDocument();
     // The group heading itself is unaffected -- still there, still bare.
     expect(screen.getByTestId('jsonrpc-document-tag-accounts-title')).toHaveTextContent('accounts');
+  });
+
+  it('omits every component catalogue section when the document declares no matching component map', () => {
+    render(JsonRpcDocument, { document: document() });
+
+    expect(screen.queryByTestId('jsonrpc-document-tag-catalog')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('jsonrpc-document-example-catalog')).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId('jsonrpc-document-example-pairing-catalog'),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId('jsonrpc-document-link-catalog')).not.toBeInTheDocument();
+  });
+
+  it('renders every component catalogue when the document declares one, reachable independent of any method', () => {
+    render(JsonRpcDocument, {
+      document: document({
+        tagCatalog: [{ name: 'archived', description: 'No longer used by any method.' }],
+        exampleCatalog: [{ name: 'ZeroBalance', value: '0' }],
+        examplePairingCatalog: [{ name: 'Pair', params: [], result: '0' }],
+        linkCatalog: [{ name: 'RetryGetBalance', method: 'getBalance' }],
+      }),
+    });
+
+    expect(screen.getByTestId('jsonrpc-document-tag-catalog-0-name')).toHaveTextContent('archived');
+    expect(screen.getByTestId('jsonrpc-document-example-catalog-0-name')).toHaveTextContent(
+      'ZeroBalance',
+    );
+    expect(screen.getByTestId('jsonrpc-document-example-pairing-catalog-0-name')).toHaveTextContent(
+      'Pair',
+    );
+    expect(screen.getByTestId('jsonrpc-document-link-catalog-0-name')).toHaveTextContent(
+      'RetryGetBalance',
+    );
   });
 });

@@ -118,6 +118,21 @@ function isExternalDocs(value: unknown): boolean {
   return isRecord(value) && isString(value.url) && hasOptionalStrings(value, ['description']);
 }
 
+/**
+ * A Tag Object -- shared by {@link hasDocumentBase}'s `tags` (tags a method/operation
+ * actually used) and, since card 44, OpenRPC's `tagCatalog` (every `components.tags` entry,
+ * used or not). Factored out rather than duplicated across the two call sites.
+ */
+function isTag(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    isString(value.name) &&
+    hasOptionalStrings(value, ['description', 'parent', 'kind']) &&
+    (value.externalDocs === undefined || isExternalDocs(value.externalDocs)) &&
+    hasOptionalExtensions(value)
+  );
+}
+
 function isServer(value: unknown): boolean {
   if (!isRecord(value) || !isString(value.name) || !isString(value.url)) return false;
   if (!hasOptionalStrings(value, ['description', 'protocol'])) return false;
@@ -142,7 +157,11 @@ function isExample(value: unknown): boolean {
     // An example given only by `externalValue` legitimately has no `value` key at all --
     // serializing `{ value: undefined }` drops the key entirely, so requiring it
     // unconditionally would reject exactly the externally-hosted examples card 38 added.
-    ('value' in value || isString(value.externalValue))
+    ('value' in value || isString(value.externalValue)) &&
+    // `extensions` is optional on this shape -- only OpenRPC's `components.examples`
+    // catalogue (card 44) ever sets it, so an OpenAPI/AsyncAPI example without one must
+    // still pass.
+    hasOptionalExtensions(value)
   );
 }
 
@@ -162,6 +181,7 @@ function isSchema(value: unknown): boolean {
         'title',
         'format',
         'description',
+        'comment',
         'circularRef',
         'unresolvedRef',
         'refName',
@@ -399,6 +419,45 @@ function isAsyncOperation(value: unknown): boolean {
   );
 }
 
+/**
+ * OpenRPC's ExamplePairing Object -- shared by a method's own `examples` and, since card
+ * 44, `components.examplePairings`' catalogue entries (the same shape, just not tied to
+ * any one method's params/result).
+ */
+function isRpcExample(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    isString(value.name) &&
+    hasOptionalStrings(value, ['summary', 'description']) &&
+    'params' in value &&
+    // Either an inline result or an externally hosted one. Requiring `result`
+    // unconditionally rejects an externalValue-only example outright, because an
+    // absent `result` is dropped entirely by JSON serialisation -- the same trap
+    // `isExample` hit for OpenAPI.
+    ('result' in value || isString(value.resultExternalValue)) &&
+    hasOptionalExtensions(value)
+  );
+}
+
+/**
+ * OpenRPC's Link Object -- shared by a method's own `links` and, since card 44,
+ * `components.links`' catalogue entries.
+ */
+function isRpcLink(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    isString(value.name) &&
+    hasOptionalStrings(value, ['description', 'summary', 'method']) &&
+    (value.params === undefined ||
+      (Array.isArray(value.params) &&
+        value.params.every(
+          (param) => isRecord(param) && isString(param.name) && 'value' in param,
+        ))) &&
+    (value.server === undefined || isServer(value.server)) &&
+    hasOptionalExtensions(value)
+  );
+}
+
 function isRpcMethod(value: unknown): boolean {
   return (
     isRecord(value) &&
@@ -421,19 +480,7 @@ function isRpcMethod(value: unknown): boolean {
         hasOptionalExtensions(error),
     ) &&
     Array.isArray(value.examples) &&
-    value.examples.every(
-      (example) =>
-        isRecord(example) &&
-        isString(example.name) &&
-        hasOptionalStrings(example, ['summary', 'description']) &&
-        'params' in example &&
-        // Either an inline result or an externally hosted one. Requiring `result`
-        // unconditionally rejects an externalValue-only example outright, because an
-        // absent `result` is dropped entirely by JSON serialisation -- the same trap
-        // `isExample` hit for OpenAPI.
-        ('result' in example || isString(example.resultExternalValue)) &&
-        hasOptionalExtensions(example),
-    ) &&
+    value.examples.every(isRpcExample) &&
     (value.result === undefined ||
       (isRecord(value.result) &&
         isString(value.result.name) &&
@@ -495,12 +542,26 @@ export function isApiDocument(value: unknown, expectedId?: string): value is Api
         hasUniqueIds(value.methods) &&
         value.methods.every(isRpcMethod) &&
         Array.isArray(value.contentDescriptors) &&
-        value.contentDescriptors.every(isRpcParam)
+        value.contentDescriptors.every(isRpcParam) &&
+        Array.isArray(value.tagCatalog) &&
+        value.tagCatalog.every(isTag) &&
+        Array.isArray(value.exampleCatalog) &&
+        value.exampleCatalog.every(isExample) &&
+        Array.isArray(value.examplePairingCatalog) &&
+        value.examplePairingCatalog.every(isRpcExample) &&
+        Array.isArray(value.linkCatalog) &&
+        value.linkCatalog.every(isRpcLink)
       );
     case 'jsonschema':
       return (
         (value.root === undefined || isSchema(value.root)) &&
-        (value.schemaId === undefined || isString(value.schemaId))
+        (value.schemaId === undefined || isString(value.schemaId)) &&
+        (value.vocabulary === undefined ||
+          (Array.isArray(value.vocabulary) &&
+            value.vocabulary.every(
+              (entry) =>
+                isRecord(entry) && isString(entry.uri) && typeof entry.mandatory === 'boolean',
+            )))
       );
     default:
       return false;

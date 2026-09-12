@@ -141,6 +141,14 @@ paths:
                 Fetch the pet that was just created, using this response's id.
               parameters:
                 petId: $response.body#/id
+            NotifyPetAdopted:
+              operationRef: '#/webhooks/petAdopted/post'
+              description: >-
+                The webhook fired if this pet is later adopted -- resolved by JSON
+                Pointer into `webhooks` rather than `operationId`, the way `paths`
+                operations above are.
+              parameters:
+                petId: $response.body#/id
         '400': { $ref: '#/components/responses/BadRequest' }
         '409':
           description: A pet with that name already exists.

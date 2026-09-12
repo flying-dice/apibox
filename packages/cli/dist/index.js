@@ -221,7 +221,8 @@ function walk(raw, name, required, frame) {
     refName,
     title: asString(schema.title),
     types: toTypes(schema),
-    description: asString(schema.description)
+    description: asString(schema.description),
+    comment: asString(schema.$comment)
   };
   const format = asString(schema.format);
   if (format)
@@ -1129,6 +1130,10 @@ async function parseJsonRpc(raw, options = {}) {
   const methods = parseMethods(dereferenced, names, tagInfoByName, warnings);
   const schemas = parseComponentSchemas(dereferenced, names);
   const contentDescriptors = parseComponentContentDescriptors(dereferenced, names);
+  const tagCatalog = parseComponentTags(dereferenced);
+  const exampleCatalog = parseComponentExamples(dereferenced);
+  const examplePairingCatalog = parseComponentExamplePairings(dereferenced);
+  const linkCatalog = parseComponentLinks(dereferenced);
   return {
     id: options.id ?? slugify(title),
     kind: "jsonrpc",
@@ -1146,7 +1151,11 @@ async function parseJsonRpc(raw, options = {}) {
     methods,
     schemas,
     contentDescriptors,
-    nav: buildNav2(methods, schemas, contentDescriptors),
+    tagCatalog,
+    exampleCatalog,
+    examplePairingCatalog,
+    linkCatalog,
+    nav: buildNav2(methods, schemas, contentDescriptors, tagCatalog, exampleCatalog, examplePairingCatalog, linkCatalog),
     warnings,
     extensions: parseExtensions2(dereferenced)
   };
@@ -1168,6 +1177,62 @@ function parseComponentContentDescriptors(root, names) {
       schema: normaliseSchema(entry.schema, { names }),
       extensions: parseExtensions2(entry)
     };
+  }).filter((entry) => entry !== undefined);
+}
+function parseComponentTags(root) {
+  const tags = asRecord(asRecord(root.components)?.tags);
+  if (!tags)
+    return [];
+  return Object.entries(tags).map(([key, value]) => {
+    const entry = asRecord(value);
+    if (!entry)
+      return;
+    return {
+      name: asString(entry.name) ?? key,
+      description: asString(entry.description),
+      externalDocs: parseExternalDocs(entry.externalDocs),
+      extensions: parseExtensions2(entry)
+    };
+  }).filter((entry) => entry !== undefined);
+}
+function parseComponentExamples(root) {
+  const examples = asRecord(asRecord(root.components)?.examples);
+  if (!examples)
+    return [];
+  return Object.entries(examples).map(([key, value]) => {
+    const entry = asRecord(value);
+    if (!entry)
+      return;
+    if (!("value" in entry) && !asString(entry.externalValue))
+      return;
+    return {
+      name: asString(entry.name) ?? key,
+      summary: asString(entry.summary),
+      description: asString(entry.description),
+      value: entry.value,
+      externalValue: asString(entry.externalValue),
+      extensions: parseExtensions2(entry)
+    };
+  }).filter((entry) => entry !== undefined);
+}
+function parseComponentExamplePairings(root) {
+  const pairings = asRecord(asRecord(root.components)?.examplePairings);
+  if (!pairings)
+    return [];
+  return parseExamples(namedEntries(pairings), "either");
+}
+function parseComponentLinks(root) {
+  const links = asRecord(asRecord(root.components)?.links);
+  if (!links)
+    return [];
+  return parseLinks(namedEntries(links));
+}
+function namedEntries(map) {
+  return Object.entries(map).map(([key, value]) => {
+    const entry = asRecord(value);
+    if (!entry)
+      return;
+    return entry.name === undefined ? { ...entry, name: key } : entry;
   }).filter((entry) => entry !== undefined);
 }
 function parseExtensions2(record) {
@@ -1332,7 +1397,7 @@ function collectTags(methods, tagInfoByName) {
   }
   return tags;
 }
-function buildNav2(methods, schemas, contentDescriptors) {
+function buildNav2(methods, schemas, contentDescriptors, tagCatalog, exampleCatalog, examplePairingCatalog, linkCatalog) {
   const groups = new Map;
   for (const method of methods) {
     const tag = method.tags[0] ?? "Methods";
@@ -1369,11 +1434,62 @@ function buildNav2(methods, schemas, contentDescriptors) {
       }))
     });
   }
+  if (tagCatalog.length > 0) {
+    const childIds = new Set;
+    nav.push({
+      id: "tag-catalog",
+      label: "Tags",
+      children: tagCatalog.map((tag) => ({
+        id: uniqueId(`tag-catalog-${slugify(tag.name)}`, childIds),
+        label: tag.name
+      }))
+    });
+  }
+  if (exampleCatalog.length > 0) {
+    const childIds = new Set;
+    nav.push({
+      id: "example-catalog",
+      label: "Examples",
+      children: exampleCatalog.map((example) => ({
+        id: uniqueId(`example-catalog-${slugify(example.name)}`, childIds),
+        label: example.name
+      }))
+    });
+  }
+  if (examplePairingCatalog.length > 0) {
+    const childIds = new Set;
+    nav.push({
+      id: "example-pairing-catalog",
+      label: "Example Pairings",
+      children: examplePairingCatalog.map((pairing) => ({
+        id: uniqueId(`example-pairing-catalog-${slugify(pairing.name)}`, childIds),
+        label: pairing.name
+      }))
+    });
+  }
+  if (linkCatalog.length > 0) {
+    const childIds = new Set;
+    nav.push({
+      id: "link-catalog",
+      label: "Links",
+      children: linkCatalog.map((link) => ({
+        id: uniqueId(`link-catalog-${slugify(link.name)}`, childIds),
+        label: link.name
+      }))
+    });
+  }
   return nav;
 }
 
 // packages/core/src/formats/jsonschema/index.ts
-var CONTAINER_KEYS = new Set(["$schema", "$id", "id", "$defs", "definitions", "$comment"]);
+function parseVocabulary(raw) {
+  const vocabulary = asRecord(raw);
+  if (!vocabulary)
+    return;
+  const entries = Object.entries(vocabulary).filter((entry) => typeof entry[1] === "boolean").map(([uri, mandatory]) => ({ uri, mandatory }));
+  return entries.length > 0 ? entries : undefined;
+}
+var CONTAINER_KEYS = new Set(["$schema", "$id", "id", "$defs", "definitions", "$vocabulary"]);
 var DEFAULT_DIALECT = "2020-12";
 async function parseJsonSchema(raw, options = {}) {
   const root = asRecord(raw);
@@ -1413,6 +1529,7 @@ async function parseJsonSchema(raw, options = {}) {
     schemaId,
     root: rootNode,
     schemas,
+    vocabulary: parseVocabulary(dereferenced.$vocabulary),
     servers: [],
     tags: [],
     nav: buildNav3(rootNode, schemas),
@@ -1479,6 +1596,7 @@ async function parseOpenApi(raw, options = {}) {
   const taken = new Set;
   const operations = parseOperations(dereferenced, names, servers, warnings, taken);
   const webhooks = parseWebhooks(dereferenced, names, servers, warnings, taken);
+  resolveLinkOperationRefs(operations, webhooks);
   const schemas = parseComponentSchemas(dereferenced, names);
   const documentExtensions = [
     ...parseExtensions3(dereferenced) ?? [],
@@ -1606,7 +1724,6 @@ function parseOperations(root, names, documentServers, warnings, taken) {
       parseCallbacks: true
     }));
   }
-  resolveLinkOperationRefs(operations);
   return operations;
 }
 function parseWebhooks(root, names, documentServers, warnings, taken) {
@@ -1704,7 +1821,7 @@ function parseCallbacks(raw, names, warnings, taken) {
 function jsonPointerEscape(segment) {
   return segment.replace(/~/g, "~0").replace(/\//g, "~1");
 }
-function resolveLinkOperationRefs(operations) {
+function resolveLinkOperationRefs(operations, webhooks) {
   const byPointer = new Map;
   for (const operation of operations) {
     if (!operation.operationId)
@@ -1712,7 +1829,13 @@ function resolveLinkOperationRefs(operations) {
     const pointer = `#/paths/${jsonPointerEscape(operation.path)}/${operation.method.toLowerCase()}`;
     byPointer.set(pointer, operation.operationId);
   }
-  for (const operation of operations) {
+  for (const webhook of webhooks) {
+    if (!webhook.operationId)
+      continue;
+    const pointer = `#/webhooks/${jsonPointerEscape(webhook.path)}/${webhook.method.toLowerCase()}`;
+    byPointer.set(pointer, webhook.operationId);
+  }
+  for (const operation of [...operations, ...webhooks]) {
     for (const response of operation.responses) {
       for (const link of response.links ?? []) {
         if (!link.operationRef)

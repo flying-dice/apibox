@@ -4,6 +4,21 @@ import type { JsonSchemaDocument, NavNode, SchemaNode } from '../../types.js';
 import { asRecord, asString, slugify } from '../../utils.js';
 import { dereferenceDocument, schemaNavigation } from '../shared.js';
 
+/**
+ * `$vocabulary`: which keyword vocabularies the document's meta-schema requires (`true`) or
+ * merely permits (`false`), by URI. Read directly here rather than through `normaliseSchema`
+ * -- see `schema.ts`'s doc comment on `$comment`/`$vocabulary` for why the two keywords get
+ * different treatment.
+ */
+function parseVocabulary(raw: unknown): Array<{ uri: string; mandatory: boolean }> | undefined {
+  const vocabulary = asRecord(raw);
+  if (!vocabulary) return undefined;
+  const entries = Object.entries(vocabulary)
+    .filter((entry): entry is [string, boolean] => typeof entry[1] === 'boolean')
+    .map(([uri, mandatory]) => ({ uri, mandatory }));
+  return entries.length > 0 ? entries : undefined;
+}
+
 export interface ParseJsonSchemaOptions {
   id?: string;
   location?: string;
@@ -14,7 +29,12 @@ export interface ParseJsonSchemaOptions {
  * right. A document consisting only of these has no root schema to show — see
  * `hasRootContent` below.
  */
-const CONTAINER_KEYS = new Set(['$schema', '$id', 'id', '$defs', 'definitions', '$comment']);
+// `$comment` is deliberately NOT listed here, even though it was before this keyword was
+// modelled: it is now genuine schema content (see `SchemaNode.comment`), not container
+// metadata, so a document whose only content beyond `$schema`/`$defs` is a `$comment`
+// must still get a root schema to carry it -- `$vocabulary`, by contrast, is exactly the
+// kind of document-shape metadata this set exists to name.
+const CONTAINER_KEYS = new Set(['$schema', '$id', 'id', '$defs', 'definitions', '$vocabulary']);
 
 /** The dialect assumed when `$schema` is missing or not one apibox recognises. */
 const DEFAULT_DIALECT = '2020-12';
@@ -101,6 +121,7 @@ export async function parseJsonSchema(
     schemaId,
     root: rootNode,
     schemas,
+    vocabulary: parseVocabulary(dereferenced.$vocabulary),
     servers: [],
     tags: [],
     nav: buildNav(rootNode, schemas),

@@ -7,7 +7,11 @@
   import ServerList from '../../organisms/ServerList.svelte';
   import { itemsByNavigation } from '../navigation-groups.js';
   import RpcContentDescriptorCatalog from './RpcContentDescriptorCatalog.svelte';
+  import RpcExampleCatalog from './RpcExampleCatalog.svelte';
+  import RpcExamplePairingCatalog from './RpcExamplePairingCatalog.svelte';
+  import RpcLinkCatalog from './RpcLinkCatalog.svelte';
   import RpcMethodCard from './RpcMethodCard.svelte';
+  import RpcTagCatalog from './RpcTagCatalog.svelte';
 
   interface Props {
     document: JsonRpcDocumentModel;
@@ -20,6 +24,14 @@
   const contentDescriptorNavigation = $derived(
     document.nav.find((node) => node.id === 'content-descriptors'),
   );
+  const tagCatalogNavigation = $derived(document.nav.find((node) => node.id === 'tag-catalog'));
+  const exampleCatalogNavigation = $derived(
+    document.nav.find((node) => node.id === 'example-catalog'),
+  );
+  const examplePairingCatalogNavigation = $derived(
+    document.nav.find((node) => node.id === 'example-pairing-catalog'),
+  );
+  const linkCatalogNavigation = $derived(document.nav.find((node) => node.id === 'link-catalog'));
   // Tag Object metadata is keyed by name on `document.tags`, not carried on `NavNode`
   // (shared navigation infrastructure other formats also use) -- same lookup-by-label
   // treatment as OpenApiDocument's tag descriptions.
@@ -87,6 +99,26 @@
     contentDescriptors={document.contentDescriptors}
     navigation={contentDescriptorNavigation}
     testId="{testId}-content-descriptors"
+  />
+  <RpcTagCatalog
+    tags={document.tagCatalog}
+    navigation={tagCatalogNavigation}
+    testId="{testId}-tag-catalog"
+  />
+  <RpcExampleCatalog
+    examples={document.exampleCatalog}
+    navigation={exampleCatalogNavigation}
+    testId="{testId}-example-catalog"
+  />
+  <RpcExamplePairingCatalog
+    examplePairings={document.examplePairingCatalog}
+    navigation={examplePairingCatalogNavigation}
+    testId="{testId}-example-pairing-catalog"
+  />
+  <RpcLinkCatalog
+    links={document.linkCatalog}
+    navigation={linkCatalogNavigation}
+    testId="{testId}-link-catalog"
   />
 </article>
 

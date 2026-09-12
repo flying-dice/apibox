@@ -2,16 +2,20 @@ import type { Composition, SchemaConstraint, SchemaNode, XmlInfo } from './types
 import { asRecord, asString } from './utils.js';
 
 /**
- * `$comment` and `$vocabulary` are deliberately never read here.
+ * `$comment` is parsed below onto `SchemaNode.comment`. The spec's "MUST NOT be used to
+ * convey information to consumers" line constrains what an *author* may rely on a
+ * *validator* enforcing -- it says nothing about whether a documentation tool may show a
+ * reader what the document actually contains. Surfacing it is fine as long as it never
+ * reads as normative content, which is why it stays a field of its own rather than getting
+ * appended to `description`: a renderer must be able to label it distinctly.
  *
- * `$comment` is author-facing by spec design ("MUST NOT be used to convey information to
- * consumers") -- surfacing it to a reader would show them a note the spec explicitly says
- * is not for them. `$vocabulary` declares which keyword vocabularies a meta-schema requires
- * or permits and whether each is optional; apibox is a renderer, not a validator, so it
- * neither enforces nor needs to track vocabulary membership -- there is no reader-facing
- * fact this would add beyond "this document mentions vocabularies", which is not useful
- * without also implementing vocabulary-aware validation. Both are genuinely absent from the
- * model, not a silent drop: this comment is that decision's record.
+ * `$vocabulary` is deliberately NOT read here. Unlike every other keyword this file walks,
+ * it is meaningful only at a schema resource's own root ($id boundary) -- modelling it as a
+ * `SchemaNode` field would let it leak onto a nested schema that never declared one, since
+ * `walk()` visits every nested object the same way. It is instead read directly off the
+ * document root by the one format parser that has a document-level place to put it
+ * (`formats/jsonschema/index.ts`), the same way that parser already re-reads `$schema`
+ * itself rather than trusting detection.
  */
 
 /**
@@ -146,6 +150,7 @@ function walk(
     title: asString(schema.title),
     types: toTypes(schema),
     description: asString(schema.description),
+    comment: asString(schema.$comment),
   };
 
   const format = asString(schema.format);

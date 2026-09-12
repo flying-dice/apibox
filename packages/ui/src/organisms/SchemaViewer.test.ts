@@ -47,6 +47,28 @@ describe('SchemaViewer', () => {
     expect(screen.getByTestId('schema-root')).toBeInTheDocument();
   });
 
+  it('shows the root for a bare $comment, and renders it distinctly from description', () => {
+    render(SchemaViewer, {
+      schema: {
+        ...PET,
+        description: 'A pet available in the store.',
+        comment: 'Internal: pending a rename to Animal in the next major version.',
+      },
+    });
+    expect(screen.getByTestId('schema-root')).toBeInTheDocument();
+
+    const description = screen.getByTestId('schema-root-property-description');
+    expect(description).toHaveTextContent('A pet available in the store.');
+    expect(description).not.toHaveTextContent('Internal: pending a rename');
+
+    const comment = screen.getByTestId('schema-root-property-comment');
+    expect(comment).toHaveTextContent('Authoring note');
+    expect(comment).toHaveTextContent(
+      'Internal: pending a rename to Animal in the next major version.',
+    );
+    expect(comment).not.toHaveTextContent('A pet available in the store.');
+  });
+
   it('collapses below the default depth and expands on request', async () => {
     render(SchemaViewer, { schema: PET, defaultDepth: 1 });
 

@@ -1,6 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://apibox.dev/schemas/user-profile.json",
+  "$comment": "displayName intentionally allows any string -- do not add a format keyword here without checking with the identity team first.",
+  "$vocabulary": {
+    "https://json-schema.org/draft/2020-12/vocab/core": true,
+    "https://json-schema.org/draft/2020-12/vocab/applicator": true,
+    "https://json-schema.org/draft/2020-12/vocab/format-annotation": false
+  },
   "title": "User Profile",
   "description": "A user's public profile.",
   "type": "object",

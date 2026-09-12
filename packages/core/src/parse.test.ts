@@ -123,6 +123,33 @@ describe('JSON Schema', () => {
     expect(doc.schemas.map((s) => s.name)).toEqual(['Address']);
   });
 
+  it('parses $comment as an authoring note distinct from description, and $vocabulary as mandatory/non-mandatory entries', async () => {
+    const doc = (await loadApiDocument(examples('user-profile.schema.json'))) as JsonSchemaDocument;
+
+    // The root keeps its own $comment (unlike description, which is promoted to the
+    // document and stripped off the root -- see the "promotes ... description" test
+    // below). The two fields must never collapse into one another.
+    expect(doc.root?.comment).toBe(
+      'displayName intentionally allows any string -- do not add a format keyword here without checking with the identity team first.',
+    );
+    expect(doc.root?.description).toBeUndefined();
+    expect(doc.description).toBe("A user's public profile.");
+
+    expect(doc.vocabulary).toEqual([
+      { uri: 'https://json-schema.org/draft/2020-12/vocab/core', mandatory: true },
+      { uri: 'https://json-schema.org/draft/2020-12/vocab/applicator', mandatory: true },
+      { uri: 'https://json-schema.org/draft/2020-12/vocab/format-annotation', mandatory: false },
+    ]);
+  });
+
+  it('does not surface $vocabulary when the document declares none', async () => {
+    const doc = (await parseApiDocument(
+      { $schema: 'https://json-schema.org/draft/2020-12/schema', type: 'string' },
+      { format: 'jsonschema' },
+    )) as JsonSchemaDocument;
+    expect(doc.vocabulary).toBeUndefined();
+  });
+
   it('parses a draft-07 document: root and named `definitions`', async () => {
     const doc = (await loadApiDocument(
       fixtures('widget-draft07.schema.json'),
@@ -771,6 +798,49 @@ describe('OpenAPI', () => {
       const link = doc.operations.find((o) => o.id === 'createpet')?.responses[0]?.links?.[0];
       expect(link?.operationRef).toBe('#/paths/~1pets~1{id}/get');
       expect(link?.resolvedOperationId).toBe('getPet');
+    });
+
+    it('resolves an operationRef pointing at a webhook, using the #/webhooks/{name}/{method} pointer form', async () => {
+      const doc = (await parseApiDocument({
+        openapi: '3.1.0',
+        info: { title: 'L', version: '1.0.0' },
+        paths: {
+          '/pets': {
+            post: {
+              operationId: 'createPet',
+              responses: {
+                '201': {
+                  description: 'created',
+                  links: {
+                    NotifyAdopted: { operationRef: '#/webhooks/petAdopted/post' },
+                  },
+                },
+              },
+            },
+          },
+        },
+        webhooks: {
+          petAdopted: {
+            post: {
+              operationId: 'petAdopted',
+              responses: { '200': { description: 'ok' } },
+            },
+          },
+        },
+      })) as OpenApiDocument;
+
+      const link = doc.operations.find((o) => o.id === 'createpet')?.responses[0]?.links?.[0];
+      expect(link?.resolvedOperationId).toBe('petAdopted');
+    });
+
+    it("resolves the petstore fixture's NotifyPetAdopted link to the petAdopted webhook operation", async () => {
+      const doc = await load();
+      const createPet = doc.operations.find((o) => o.id === 'createpet');
+      const link = createPet?.responses
+        .find((r) => r.status === '201')
+        ?.links?.find((l) => l.name === 'NotifyPetAdopted');
+      expect(link?.operationRef).toBe('#/webhooks/petAdopted/post');
+      expect(link?.resolvedOperationId).toBe('petAdopted');
     });
 
     it('leaves resolvedOperationId undefined when operationRef matches nothing in the document', async () => {
@@ -2280,6 +2350,10 @@ describe('JSON-RPC', () => {
       'subscriptions',
       'Schemas',
       'Content Descriptors',
+      'Tags',
+      'Examples',
+      'Example Pairings',
+      'Links',
     ]);
   });
 
@@ -2394,6 +2468,49 @@ describe('JSON-RPC', () => {
     expect(doc.tags).toEqual([
       { name: 'shared', description: 'A tag reused by two methods.', externalDocs: undefined },
     ]);
+  });
+
+  it('catalogues components.tags, .examples, .examplePairings and .links independent of whether any method uses them', async () => {
+    const doc = await load();
+
+    // An orphan tag: no method in the fixture references "archived".
+    const archived = doc.tagCatalog.find((tag) => tag.name === 'archived');
+    expect(archived?.description).toBe(
+      'Methods kept for backward compatibility, not yet used by any current method.',
+    );
+    expect(doc.tags.some((tag) => tag.name === 'archived')).toBe(false);
+
+    // components.examples: the plain Example Object shape (a value, not a params/result pair).
+    const zeroBalance = doc.exampleCatalog.find((example) => example.name === 'ZeroBalance');
+    expect(zeroBalance?.value).toBe('0');
+    expect(zeroBalance?.summary).toBe('An account with no funds');
+
+    // components.examplePairings: the params/result pairing shape, same as a method's own examples.
+    const pairing = doc.examplePairingCatalog.find(
+      (example) => example.name === 'GetBalanceForNewAccount',
+    );
+    expect(pairing?.params).toEqual({ address: '0x0000000000000000000000000000000000000099' });
+    expect(pairing?.result).toBe('0');
+
+    // components.links.
+    const link = doc.linkCatalog.find((entry) => entry.name === 'RetryGetBalance');
+    expect(link?.method).toBe('getBalance');
+    expect(link?.params).toEqual([{ name: 'address', value: '$params.address' }]);
+  });
+
+  it('omits a catalogue nav entry entirely when the document declares no matching component map', async () => {
+    const doc = (await parseApiDocument(
+      { openrpc: '1.3.2', info: { title: 'No components', version: '1.0.0' }, methods: [] },
+      { format: 'jsonrpc' },
+    )) as JsonRpcDocument;
+    expect(doc.tagCatalog).toEqual([]);
+    expect(doc.exampleCatalog).toEqual([]);
+    expect(doc.examplePairingCatalog).toEqual([]);
+    expect(doc.linkCatalog).toEqual([]);
+    expect(doc.nav.some((node) => node.id === 'tag-catalog')).toBe(false);
+    expect(doc.nav.some((node) => node.id === 'example-catalog')).toBe(false);
+    expect(doc.nav.some((node) => node.id === 'example-pairing-catalog')).toBe(false);
+    expect(doc.nav.some((node) => node.id === 'link-catalog')).toBe(false);
   });
 
   it('captures x-* extensions on a param, a tag, a link and an example, filtering nothing since none of these are parser-injected', async () => {

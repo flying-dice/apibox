@@ -44,6 +44,7 @@
       schema &&
         (children.length === 0 ||
           schema.description ||
+          schema.comment ||
           schema.examples?.length ||
           schema.compositions?.length ||
           schema.circularRef ||

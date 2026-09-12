@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { JsonSchemaDocument as JsonSchemaDocumentModel } from '@apibox/core';
+  import Chip from '../../atoms/Chip.svelte';
   import DocumentHeader from '../../organisms/DocumentHeader.svelte';
   import KeyValueRow from '../../molecules/KeyValueRow.svelte';
   import SchemaCatalog from '../../organisms/SchemaCatalog.svelte';
@@ -26,6 +27,25 @@
     <dl class="metadata" data-testid="{testId}-metadata">
       <KeyValueRow label="Schema ID" testId="{testId}-schema-id">{document.schemaId}</KeyValueRow>
     </dl>
+  {/if}
+
+  {#if document.vocabulary?.length}
+    <!--
+      $vocabulary sits beside the dialect/schema-id metadata above rather than inside the
+      root schema tree -- it describes the meta-schema this document's dialect requires,
+      not this document's own instance data, so a "mandatory"/"optional" chip per URI reads
+      as document-level metadata, matching where a reader already looks for the dialect.
+    -->
+    <div class="vocabulary" data-testid="{testId}-vocabulary">
+      {#each document.vocabulary as entry, index (entry.uri)}
+        <Chip
+          label={entry.mandatory ? 'mandatory' : 'optional'}
+          value={entry.uri}
+          code
+          testId="{testId}-vocabulary-{index}"
+        />
+      {/each}
+    </div>
   {/if}
 
   {#if document.root}
@@ -69,6 +89,12 @@
   .metadata {
     max-width: 44rem;
     margin: 0;
+  }
+
+  .vocabulary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--apibox-space-2);
   }
 
   h2 {

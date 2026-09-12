@@ -31,6 +31,16 @@ export interface SchemaNode {
   format?: string;
   description?: string;
   /**
+   * \`$comment\`: an authoring note the spec says a validator MUST NOT surface to a consumer
+   * as part of validation results. That rule constrains what an *author* may rely on a
+   * *validator* doing with it -- it says nothing about a documentation tool showing what a
+   * document contains, which is the whole point of apibox. Kept distinct from
+   * \`description\` -- never concatenated with it -- so a renderer can label it as the
+   * non-normative authoring note it is and a reader is never left mistaking one for the
+   * other.
+   */
+  comment?: string;
+  /**
    * The content vocabulary: \`contentEncoding\` and \`contentMediaType\`, annotating a string
    * instance as encoded structured content (a base64-encoded PNG, an embedded JWT, ...). Kept
    * as plain strings, same as \`format\`, since both are annotations a reader scans for
@@ -296,6 +306,13 @@ export interface ExampleValue {
    * a link, not as the value it points to.
    */
   externalValue?: string;
+  /**
+   * `x-*` specification extensions found directly on this object, in declaration order.
+   * Optional because most callers of this shape (OpenAPI, AsyncAPI media-type examples)
+   * predate this field and never set it -- only OpenRPC's `components.examples` catalogue
+   * (card 44) populates it.
+   */
+  extensions?: Array<{ key: string; value: unknown }>;
 }
 
 /** One field of a protocol {@link BindingInfo}, in declaration order. */
@@ -898,12 +915,38 @@ export interface JsonRpcDocument extends ApiDocumentBase {
   schemas: SchemaNode[];
   /**
    * Named entries under `components.contentDescriptors`, browsable independent of which
-   * methods reference them -- the same "shared building block" value `schemas` already has,
-   * extended to the other component bucket with its own distinguishing `name`. The other
-   * component buckets (`examples`, `links`, `examplePairings`, `tags`) are deliberately not
-   * given an equivalent catalogue; see the parser's own doc comment for why.
+   * methods reference them -- the same "shared building block" value `schemas` already has.
    */
   contentDescriptors: RpcParam[];
+  /**
+   * Named entries under `components.tags`, independent of whether any method references
+   * them -- unlike {@link ApiDocumentBase.tags}, which only lists tags a method actually
+   * used, in the order first encountered. A tag declared here but referenced by nothing is
+   * exactly the "orphan" a reader cannot otherwise discover: it is still part of the
+   * document's declared contract, so it gets its own catalogue rather than silently
+   * dropping out because no method happened to point at it.
+   */
+  tagCatalog: TagInfo[];
+  /**
+   * Named entries under `components.examples` -- the Example Object bucket (a name, a
+   * value or `externalValue`), not to be confused with {@link RpcMethod.examples} or
+   * `components.examplePairings` below, both of which are the *pairing* shape (params +
+   * result). OpenRPC genuinely has both bucket shapes; this is the plainer of the two.
+   */
+  exampleCatalog: ExampleValue[];
+  /**
+   * Named entries under `components.examplePairings`, reusing {@link RpcExample} -- the
+   * same params/result pairing shape a method's own `examples` already uses, since that is
+   * exactly what an ExamplePairing Object is.
+   */
+  examplePairingCatalog: RpcExample[];
+  /**
+   * Named entries under `components.links`, reusing {@link RpcLink} -- the same shape a
+   * method's own `links` already uses. Shown independent of any specific method's result,
+   * unlike a method's own links list, so its `method` field (rather than any inferred
+   * source) is what tells a reader where a catalogued link actually goes.
+   */
+  linkCatalog: RpcLink[];
   /** `x-*` specification extensions found at the document root, in declaration order. */
   extensions?: Array<{ key: string; value: unknown }>;
 }
@@ -926,6 +969,16 @@ export interface JsonSchemaDocument extends ApiDocumentBase {
   root?: SchemaNode;
   /** Named entries from `$defs` (2019-09+) or `definitions` (draft-07 and earlier). */
   schemas: SchemaNode[];
+  /**
+   * `$vocabulary`: which keyword vocabularies the document's meta-schema requires (`true`)
+   * or merely permits (`false`), by URI, in declaration order. Meaningful only at a schema
+   * resource's own root, unlike most JSON Schema keywords -- so it is read here, off the
+   * document root, rather than modelled on `SchemaNode` where `walk()` could pick it up on
+   * an unrelated nested schema that never declared one. `undefined` when the document
+   * declared none, the overwhelmingly common case, so a document with no opinion on
+   * vocabularies renders exactly as it did before this was parsed.
+   */
+  vocabulary?: Array<{ uri: string; mandatory: boolean }>;
 }
 
 export type ApiDocument = OpenApiDocument | AsyncApiDocument | JsonRpcDocument | JsonSchemaDocument;

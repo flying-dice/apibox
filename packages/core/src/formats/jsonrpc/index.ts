@@ -1,6 +1,7 @@
 import { UnsupportedDocumentError } from '../../detect.js';
 import { normaliseSchema } from '../../schema.js';
 import type {
+  ExampleValue,
   JsonRpcDocument,
   NavNode,
   RpcError,
@@ -55,6 +56,10 @@ export async function parseJsonRpc(
   const methods = parseMethods(dereferenced, names, tagInfoByName, warnings);
   const schemas = parseComponentSchemas(dereferenced, names);
   const contentDescriptors = parseComponentContentDescriptors(dereferenced, names);
+  const tagCatalog = parseComponentTags(dereferenced);
+  const exampleCatalog = parseComponentExamples(dereferenced);
+  const examplePairingCatalog = parseComponentExamplePairings(dereferenced);
+  const linkCatalog = parseComponentLinks(dereferenced);
 
   return {
     id: options.id ?? slugify(title),
@@ -76,7 +81,19 @@ export async function parseJsonRpc(
     methods,
     schemas,
     contentDescriptors,
-    nav: buildNav(methods, schemas, contentDescriptors),
+    tagCatalog,
+    exampleCatalog,
+    examplePairingCatalog,
+    linkCatalog,
+    nav: buildNav(
+      methods,
+      schemas,
+      contentDescriptors,
+      tagCatalog,
+      exampleCatalog,
+      examplePairingCatalog,
+      linkCatalog,
+    ),
     warnings,
     extensions: parseExtensions(dereferenced),
   };
@@ -88,17 +105,13 @@ export async function parseJsonRpc(
  * already closed, applied to the one other component bucket whose entries carry their own
  * distinguishing `name`, the way a schema does.
  *
- * The other component buckets deliberately do *not* get this treatment:
- * - `components.tags` / `components.examplePairings` / `components.examples`: any entry a
- *   method actually references already renders in full at that method (tags: the nav group
- *   header; example pairings/examples: the method's own Examples section, resolved by
- *   `dereferenceDocument`). A catalogue of these would either repeat that content verbatim
- *   or -- for an entry no method references at all -- show something that is arguably dead
- *   weight in the source document, not a discoverability gap in apibox.
- * - `components.links`: same "already renders where referenced" reasoning as tags/examples,
- *   and, unlike a ContentDescriptor, a Link Object's value is inherently about a specific
- *   result -> next-call relationship -- showing it divorced from the method whose result it
- *   follows from would need re-explaining that context, not just re-displaying a name.
+ * The remaining component buckets (`tags`, `examples`, `examplePairings`, `links`) get the
+ * same catalogue treatment below, for a reason this function's own history is worth keeping:
+ * they were originally skipped on the argument that any entry a method actually references
+ * already renders in full at that method, so a catalogue would surface only orphans. True --
+ * but an orphan is exactly what a reader cannot otherwise discover. A reusable component
+ * declared in the document and referenced by nothing yet is still part of the document's
+ * contract, and "nothing points at this yet" is itself useful information, not noise.
  */
 function parseComponentContentDescriptors(
   root: Record<string, unknown>,
@@ -121,6 +134,97 @@ function parseComponentContentDescriptors(
       };
     })
     .filter((entry): entry is RpcParam => entry !== undefined);
+}
+
+/**
+ * Named entries under `components.tags`, independent of whether any method references
+ * them -- unlike `collectTags`, which only sees a tag once a method actually uses it, in
+ * method-order, and never sees one that no method points at.
+ */
+function parseComponentTags(root: Record<string, unknown>): TagInfo[] {
+  const tags = asRecord(asRecord(root.components)?.tags);
+  if (!tags) return [];
+  return Object.entries(tags)
+    .map(([key, value]): TagInfo | undefined => {
+      const entry = asRecord(value);
+      if (!entry) return undefined;
+      return {
+        name: asString(entry.name) ?? key,
+        description: asString(entry.description),
+        externalDocs: parseExternalDocs(entry.externalDocs),
+        extensions: parseExtensions(entry),
+      };
+    })
+    .filter((entry): entry is TagInfo => entry !== undefined);
+}
+
+/**
+ * Named entries under `components.examples` -- the Example Object bucket (a name plus a
+ * literal `value` or an `externalValue`), distinct from `components.examplePairings` just
+ * below, which is a different object shape entirely (params + result).
+ */
+function parseComponentExamples(root: Record<string, unknown>): ExampleValue[] {
+  const examples = asRecord(asRecord(root.components)?.examples);
+  if (!examples) return [];
+  return Object.entries(examples)
+    .map(([key, value]): ExampleValue | undefined => {
+      const entry = asRecord(value);
+      if (!entry) return undefined;
+      if (!('value' in entry) && !asString(entry.externalValue)) return undefined;
+      return {
+        name: asString(entry.name) ?? key,
+        summary: asString(entry.summary),
+        description: asString(entry.description),
+        value: entry.value,
+        externalValue: asString(entry.externalValue),
+        extensions: parseExtensions(entry),
+      };
+    })
+    .filter((entry): entry is ExampleValue => entry !== undefined);
+}
+
+/**
+ * Named entries under `components.examplePairings`. Unlike a method's own `examples`, this
+ * bucket is a name-keyed map, not an array -- `parseExamples` expects the array shape it
+ * gets from a Method Object, so entries are collected into a list first (falling back to
+ * the map key for `name` the same way the other component parsers above do) before reusing
+ * it. There is no method context to read a param structure from here, so structure is
+ * inferred from the pairing itself (`parseExamples`'s own fallback), the same as it would
+ * be for a method that omitted `paramStructure`.
+ */
+function parseComponentExamplePairings(root: Record<string, unknown>): RpcExample[] {
+  const pairings = asRecord(asRecord(root.components)?.examplePairings);
+  if (!pairings) return [];
+  return parseExamples(namedEntries(pairings), 'either');
+}
+
+/**
+ * Named entries under `components.links`. As with `examplePairings` above, this bucket is
+ * a name-keyed map rather than the array shape a method's own `links` uses, so entries are
+ * collected into a list before reusing `parseLinks` unchanged.
+ */
+function parseComponentLinks(root: Record<string, unknown>): RpcLink[] {
+  const links = asRecord(asRecord(root.components)?.links);
+  if (!links) return [];
+  return parseLinks(namedEntries(links));
+}
+
+/**
+ * Reshape a name-keyed component map into the array-of-objects-with-`name` shape the
+ * per-method parsers (`parseExamples`, `parseLinks`) already expect, falling back to the
+ * map key when an entry omits its own `name` -- the same fallback `parseComponentTags` and
+ * `parseComponentExamples` apply inline, factored out here because both call sites need it
+ * applied *before* delegating to a shared array-shaped parser rather than while building
+ * their own result object.
+ */
+function namedEntries(map: Record<string, unknown>): Array<Record<string, unknown>> {
+  return Object.entries(map)
+    .map(([key, value]) => {
+      const entry = asRecord(value);
+      if (!entry) return undefined;
+      return entry.name === undefined ? { ...entry, name: key } : entry;
+    })
+    .filter((entry): entry is Record<string, unknown> => entry !== undefined);
 }
 
 /** `x-*` specification extensions found directly on `record`, in declaration order. */
@@ -359,6 +463,10 @@ function buildNav(
   methods: RpcMethod[],
   schemas: SchemaNode[],
   contentDescriptors: RpcParam[],
+  tagCatalog: TagInfo[],
+  exampleCatalog: ExampleValue[],
+  examplePairingCatalog: RpcExample[],
+  linkCatalog: RpcLink[],
 ): NavNode[] {
   const groups = new Map<string, RpcMethod[]>();
   for (const method of methods) {
@@ -393,6 +501,54 @@ function buildNav(
         id: uniqueId(`content-descriptor-${slugify(descriptor.name)}`, childIds),
         label: descriptor.name,
         deprecated: descriptor.deprecated,
+      })),
+    });
+  }
+
+  if (tagCatalog.length > 0) {
+    const childIds = new Set<string>();
+    nav.push({
+      id: 'tag-catalog',
+      label: 'Tags',
+      children: tagCatalog.map((tag) => ({
+        id: uniqueId(`tag-catalog-${slugify(tag.name)}`, childIds),
+        label: tag.name,
+      })),
+    });
+  }
+
+  if (exampleCatalog.length > 0) {
+    const childIds = new Set<string>();
+    nav.push({
+      id: 'example-catalog',
+      label: 'Examples',
+      children: exampleCatalog.map((example) => ({
+        id: uniqueId(`example-catalog-${slugify(example.name)}`, childIds),
+        label: example.name,
+      })),
+    });
+  }
+
+  if (examplePairingCatalog.length > 0) {
+    const childIds = new Set<string>();
+    nav.push({
+      id: 'example-pairing-catalog',
+      label: 'Example Pairings',
+      children: examplePairingCatalog.map((pairing) => ({
+        id: uniqueId(`example-pairing-catalog-${slugify(pairing.name)}`, childIds),
+        label: pairing.name,
+      })),
+    });
+  }
+
+  if (linkCatalog.length > 0) {
+    const childIds = new Set<string>();
+    nav.push({
+      id: 'link-catalog',
+      label: 'Links',
+      children: linkCatalog.map((link) => ({
+        id: uniqueId(`link-catalog-${slugify(link.name)}`, childIds),
+        label: link.name,
       })),
     });
   }

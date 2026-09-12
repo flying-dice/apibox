@@ -149,4 +149,64 @@ describe('runtime model validation', () => {
       }),
     ).toBe(true);
   });
+
+  it('validates a JSON-RPC document, including the card-44 component catalogues', () => {
+    const RPC_DOCUMENT = {
+      id: 'wallet',
+      kind: 'jsonrpc',
+      specVersion: '1.3.2',
+      title: 'Wallet',
+      version: '1.0.0',
+      servers: [],
+      tags: [],
+      nav: [],
+      warnings: [],
+      methods: [],
+      schemas: [],
+      contentDescriptors: [],
+      tagCatalog: [],
+      exampleCatalog: [],
+      examplePairingCatalog: [],
+      linkCatalog: [],
+    };
+    expect(isApiDocument(RPC_DOCUMENT)).toBe(true);
+
+    expect(
+      isApiDocument({
+        ...RPC_DOCUMENT,
+        tagCatalog: [{ name: 'accounts', description: 'Account methods.' }],
+        exampleCatalog: [{ name: 'Zero', value: '0' }],
+        examplePairingCatalog: [{ name: 'Pair', params: [], result: '0' }],
+        linkCatalog: [{ name: 'Retry', method: 'getBalance' }],
+      }),
+    ).toBe(true);
+
+    // Missing a catalogue entirely -- not just empty -- must fail, the same way a document
+    // missing `contentDescriptors` outright already did before this card.
+    const { tagCatalog: _omitted, ...withoutTagCatalog } = RPC_DOCUMENT;
+    expect(isApiDocument(withoutTagCatalog)).toBe(false);
+  });
+
+  it("validates a JSON Schema document's optional $vocabulary", () => {
+    const SCHEMA_DOCUMENT = {
+      id: 'profile',
+      kind: 'jsonschema',
+      specVersion: '2020-12',
+      title: 'Profile',
+      version: '2020-12',
+      servers: [],
+      tags: [],
+      nav: [],
+      warnings: [],
+      schemas: [],
+    };
+    expect(isApiDocument(SCHEMA_DOCUMENT)).toBe(true);
+    expect(
+      isApiDocument({
+        ...SCHEMA_DOCUMENT,
+        vocabulary: [{ uri: 'https://json-schema.org/draft/2020-12/vocab/core', mandatory: true }],
+      }),
+    ).toBe(true);
+    expect(isApiDocument({ ...SCHEMA_DOCUMENT, vocabulary: [{ uri: 'https://x' }] })).toBe(false);
+  });
 });

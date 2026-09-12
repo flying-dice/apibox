@@ -83,6 +83,11 @@ export async function parseOpenApi(
   const taken = new Set<string>();
   const operations = parseOperations(dereferenced, names, servers, warnings, taken);
   const webhooks = parseWebhooks(dereferenced, names, servers, warnings, taken);
+  // Resolution happens once, over both arrays together, and only once both are fully
+  // parsed -- an operationRef can point at any operation in the document, including a
+  // webhook operation parsed after the link that names it, or a path operation from
+  // within a webhook's own link. See `resolveLinkOperationRefs` for the pointer formats.
+  resolveLinkOperationRefs(operations, webhooks);
   const schemas = parseComponentSchemas(dereferenced, names);
   // Root-level extensions first, then info-level -- OpenAPI has no separate model for
   // `info` here (its fields are flattened onto the document directly), so its extensions
@@ -248,11 +253,6 @@ function parseOperations(
     );
   }
 
-  // Second pass: an operationRef can point at any operation in the document, including one
-  // parsed after the link that names it, so resolution has to wait until every operation
-  // (top-level and callback) has an id to match against.
-  resolveLinkOperationRefs(operations);
-
   return operations;
 }
 
@@ -288,12 +288,9 @@ function parseWebhooks(
     );
   }
 
-  // Deliberately not fed through resolveLinkOperationRefs: that function's pointer format
-  // (`#/paths/{path}/{method}`) does not describe a webhook (which would need `#/webhooks/
-  // {name}/{method}`), and building both formats for one shared pointer map risks a false
-  // match if a webhook name happens to equal a path. A link inside a webhook that points at
-  // another webhook by operationRef is not resolved -- a narrower gap than not having
-  // webhooks at all, and one this card's brief did not ask to close.
+  // Resolution is handled by the caller, alongside `paths`' own operations -- see
+  // `resolveLinkOperationRefs`, which now builds a pointer map covering both `#/paths/...`
+  // and `#/webhooks/...` forms and resolves every link against the combined set.
   return operations;
 }
 
@@ -422,16 +419,26 @@ function jsonPointerEscape(segment: string): string {
  * operation exists in this same document. `operationRef` is a JSON Pointer such as
  * `#/paths/~1pets~1{id}/get`, possibly prefixed with a document URL that dereferencing has
  * already stripped meaning from -- only the `#/...` fragment is matched.
+ *
+ * Webhook operations get the same treatment, under `#/webhooks/{name}/{method}` -- the
+ * mirror-image root key `paths` has, per the 3.1 `webhooks` map. Both pointer forms are
+ * built into one shared map and every link (whether it sits on a path operation or a
+ * webhook one) is resolved against the combined set, since either can point at the other.
  */
-function resolveLinkOperationRefs(operations: Operation[]): void {
+function resolveLinkOperationRefs(operations: Operation[], webhooks: Operation[]): void {
   const byPointer = new Map<string, string>();
   for (const operation of operations) {
     if (!operation.operationId) continue;
     const pointer = `#/paths/${jsonPointerEscape(operation.path)}/${operation.method.toLowerCase()}`;
     byPointer.set(pointer, operation.operationId);
   }
+  for (const webhook of webhooks) {
+    if (!webhook.operationId) continue;
+    const pointer = `#/webhooks/${jsonPointerEscape(webhook.path)}/${webhook.method.toLowerCase()}`;
+    byPointer.set(pointer, webhook.operationId);
+  }
 
-  for (const operation of operations) {
+  for (const operation of [...operations, ...webhooks]) {
     for (const response of operation.responses) {
       for (const link of response.links ?? []) {
         if (!link.operationRef) continue;

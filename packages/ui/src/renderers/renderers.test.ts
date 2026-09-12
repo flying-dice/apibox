@@ -202,8 +202,12 @@ describe('remaining format renderers', () => {
     if (document.kind !== 'jsonschema') throw new Error('Expected a JSON Schema fixture.');
     render(JsonSchemaDocument, { document });
 
+    // The root's own row is shown (and children keyed under `-root-`) because the fixture's
+    // root now carries a `$comment` -- one of `showRoot`'s own conditions, alongside
+    // `description`, that force the row -- not because of anything this test itself
+    // exercises. See the `$comment` test below for that field's own assertion.
     const nameExamples = screen.getByTestId(
-      'jsonschema-document-root-viewer-p-displayName-property-examples',
+      'jsonschema-document-root-viewer-root-p-displayName-property-examples',
     );
     expect(nameExamples).toHaveTextContent('"Ada Lovelace"');
 
@@ -213,6 +217,26 @@ describe('remaining format renderers', () => {
     );
     expect(addressExample).toHaveTextContent('"street"');
     expect(addressExample).toHaveTextContent('"1 Bridge St"');
+  });
+
+  it('renders $comment as an authoring note distinct from description, and $vocabulary as mandatory/optional chips', async () => {
+    const document = await example('user-profile.schema.json');
+    if (document.kind !== 'jsonschema') throw new Error('Expected a JSON Schema fixture.');
+    render(JsonSchemaDocument, { document });
+
+    const comment = screen.getByTestId('jsonschema-document-root-viewer-root-property-comment');
+    expect(comment).toHaveTextContent('Authoring note');
+    expect(comment).toHaveTextContent('do not add a format keyword here');
+
+    const description = screen.getByTestId('jsonschema-document-header-description');
+    expect(description).toHaveTextContent("A user's public profile.");
+    expect(description).not.toHaveTextContent('do not add a format keyword here');
+
+    expect(screen.getByTestId('jsonschema-document-vocabulary-0')).toHaveTextContent(
+      'https://json-schema.org/draft/2020-12/vocab/core',
+    );
+    expect(screen.getByTestId('jsonschema-document-vocabulary-0')).toHaveTextContent('mandatory');
+    expect(screen.getByTestId('jsonschema-document-vocabulary-2')).toHaveTextContent('optional');
   });
 
   it('keeps hooks unique when JSON-RPC parameters and errors repeat identifiers', async () => {

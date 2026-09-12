@@ -218,6 +218,50 @@
         "x-shared": true
       }
     },
+    "tags": {
+      "archived": {
+        "name": "archived",
+        "description": "Methods kept for backward compatibility, not yet used by any current method.",
+        "x-tag-color": "gray"
+      }
+    },
+    "examples": {
+      "ZeroBalance": {
+        "name": "ZeroBalance",
+        "summary": "An account with no funds",
+        "description": "Reusable result value for a freshly created account.",
+        "value": "0",
+        "x-shared": true
+      }
+    },
+    "examplePairings": {
+      "GetBalanceForNewAccount": {
+        "name": "GetBalanceForNewAccount",
+        "summary": "Balance lookup for a brand-new account",
+        "description": "Not yet wired to a method's own `examples` -- shared for reference.",
+        "params": [
+          {
+            "name": "address",
+            "value": "0x0000000000000000000000000000000000000099"
+          }
+        ],
+        "result": {
+          "name": "balance",
+          "value": "0"
+        }
+      }
+    },
+    "links": {
+      "RetryGetBalance": {
+        "name": "RetryGetBalance",
+        "summary": "Retry the balance lookup",
+        "description": "Not yet attached to a method's own `links` -- shared for reference.",
+        "method": "getBalance",
+        "params": {
+          "address": "$params.address"
+        }
+      }
+    },
     "schemas": {
       "Transaction": {
         "type": "object",

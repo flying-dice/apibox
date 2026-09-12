@@ -92,6 +92,19 @@
     <p class="description" data-testid="{id}-description">{schema.description}</p>
   {/if}
 
+  {#if schema.comment}
+    <!--
+      `$comment` is an authoring note, not reader-facing documentation -- the spec says a
+      validator MUST NOT surface it to a consumer. apibox is not a validator, but it still
+      must not let a reader mistake this for a second description, hence the explicit
+      "Authoring note" label and its own styling rather than folding it into `.description`.
+    -->
+    <p class="comment" data-testid="{id}-comment">
+      <span class="comment-label">Authoring note</span>
+      {schema.comment}
+    </p>
+  {/if}
+
   {#if schema.constraints?.length || defaultValue !== undefined || schema.enum?.length || schema.examples?.length || schema.xml || schema.contentEncoding || schema.contentMediaType || schema.schemaId || schema.anchor || schema.dynamicRef || schema.dynamicAnchor}
     <div class="meta">
       {#if schema.xml}
@@ -196,6 +209,20 @@
 
   .description {
     margin-top: var(--apibox-space-2);
+    color: var(--apibox-fg-muted);
+  }
+
+  .comment {
+    margin-top: var(--apibox-space-2);
+    font-style: italic;
+    color: var(--apibox-fg-muted);
+  }
+
+  .comment-label {
+    margin-right: var(--apibox-space-2);
+    font-style: normal;
+    font-size: var(--apibox-font-size-sm);
+    font-weight: 600;
     color: var(--apibox-fg-muted);
   }
 
