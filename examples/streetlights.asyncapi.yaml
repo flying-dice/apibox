@@ -146,7 +146,7 @@ components:
         type: object
         required: [lumens, sentAt]
         properties:
-          lumens: { type: integer, minimum: 0, description: Current luminosity. }
+          lumens: { type: integer, minimum: 0, description: Current luminosity., examples: [900] }
           sentAt: { type: string, format: date-time, description: When the reading was taken. }
       examples:
         - name: Bright afternoon

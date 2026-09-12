@@ -6,13 +6,14 @@
   "type": "object",
   "properties": {
     "id": { "type": "string", "format": "uuid" },
-    "displayName": { "type": "string" },
+    "displayName": { "type": "string", "examples": ["Ada Lovelace"] },
     "address": { "$ref": "#/$defs/Address" }
   },
   "required": ["id", "displayName"],
   "$defs": {
     "Address": {
       "type": "object",
+      "examples": [{ "street": "1 Bridge St", "city": "London" }],
       "properties": {
         "street": { "type": "string" },
         "city": { "type": "string" }

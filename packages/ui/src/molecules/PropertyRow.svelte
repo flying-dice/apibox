@@ -39,6 +39,18 @@
     return rendered ?? String(value);
   }
 
+  // Inline density, not the full-fidelity `ExampleViewer` used for operation and media-type
+  // examples: a schema-level example sits beside a property's type and constraints, so it is
+  // truncated to one line rather than pretty-printed. The untruncated value is still reachable
+  // as a native tooltip.
+  const EXAMPLE_PREVIEW_LIMIT = 60;
+  function formatExample(value: unknown): string {
+    const rendered = formatValue(value);
+    return rendered.length > EXAMPLE_PREVIEW_LIMIT
+      ? `${rendered.slice(0, EXAMPLE_PREVIEW_LIMIT - 1)}…`
+      : rendered;
+  }
+
   /**
    * A one-line summary of the `xml` keyword — full enough to be useful, compact enough not
    * to earn its own section for a keyword only XML-documenting APIs ever declare.
@@ -80,7 +92,7 @@
     <p class="description" data-testid="{id}-description">{schema.description}</p>
   {/if}
 
-  {#if schema.constraints?.length || defaultValue !== undefined || schema.enum?.length || schema.xml}
+  {#if schema.constraints?.length || defaultValue !== undefined || schema.enum?.length || schema.examples?.length || schema.xml}
     <div class="meta">
       {#if schema.xml}
         <Chip label="xml" value={formatXml(schema.xml)} testId="{id}-xml" />
@@ -105,6 +117,22 @@
           <span class="enum-label">enum</span>
           {#each schema.enum as value, index (index)}
             <Chip label="" value={formatValue(value)} code testId="{id}-enum-{index}" />
+          {/each}
+        </span>
+      {/if}
+      {#if schema.examples && schema.examples.length > 0}
+        <!--
+          A chip group beside the property, not `ExampleViewer` -- that component renders the
+          full-fidelity operation and media-type examples in a boxed section with tabs, and a
+          schema-level example must not read as the same thing said twice. This is a preview:
+          one truncated line per example, with the full value on hover.
+        -->
+        <span class="examples" role="group" aria-label="Example values" data-testid="{id}-examples">
+          <span class="examples-label">{schema.examples.length > 1 ? 'examples' : 'example'}</span>
+          {#each schema.examples as value, index (index)}
+            <span title={formatValue(value)}>
+              <Chip label="" value={formatExample(value)} code testId="{id}-example-{index}" />
+            </span>
           {/each}
         </span>
       {/if}
@@ -140,9 +168,17 @@
     align-items: baseline;
   }
 
-  .enum-label {
+  .enum-label,
+  .examples-label {
     font-size: var(--apibox-font-size-sm);
     color: var(--apibox-fg-muted);
+  }
+
+  .examples {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: var(--apibox-space-2);
+    align-items: baseline;
   }
 
   .meta {

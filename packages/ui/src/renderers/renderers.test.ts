@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import AsyncApiDocument from './asyncapi/AsyncApiDocument.svelte';
 import JsonRpcDocument from './jsonrpc/JsonRpcDocument.svelte';
 import JsonSchemaDocument from './jsonschema/JsonSchemaDocument.svelte';
+import OpenApiDocument from './openapi/OpenApiDocument.svelte';
 
 async function example(filename: string) {
   const path = resolve(import.meta.dirname, '../../../../examples', filename);
@@ -152,6 +153,66 @@ describe('remaining format renderers', () => {
       'Definitions',
     );
     expect(screen.getByTestId('jsonschema-document-schemas-0')).toHaveTextContent('Address');
+  });
+
+  // Card 39: `SchemaNode.examples` is parsed identically in all four formats, but was
+  // never drawn by any of them. One assertion per format proves the shared row actually
+  // renders it, rather than trusting that fixing one format fixed the others.
+  it('renders a schema-level example on an OpenAPI request body property', async () => {
+    const document = await example('petstore.yaml');
+    if (document.kind !== 'openapi') throw new Error('Expected an OpenAPI fixture.');
+    render(OpenApiDocument, { document });
+
+    const testId = 'openapi-document-operation-createpet-request-media-schema-root-p-name-property';
+    expect(screen.getByTestId(`${testId}-examples`)).toHaveTextContent('example');
+    expect(screen.getByTestId(`${testId}-example-0`)).toHaveTextContent('"Rex"');
+
+    // The schema-level example sits beside the property; the media type's own worked
+    // example is a separate, boxed section below it -- adjacent, not duplicated.
+    expect(
+      screen.getByTestId('openapi-document-operation-createpet-request-media-examples'),
+    ).toBeInTheDocument();
+  });
+
+  it('renders a schema-level example on an AsyncAPI message payload property', async () => {
+    const document = await example('streetlights.asyncapi.yaml');
+    if (document.kind !== 'asyncapi') throw new Error('Expected an AsyncAPI fixture.');
+    render(AsyncApiDocument, { document });
+
+    const testId =
+      'asyncapi-document-operation-receivelightmeasurement-message-0-payload-p-lumens-property';
+    expect(screen.getByTestId(`${testId}-examples`)).toHaveTextContent('example');
+    expect(screen.getByTestId(`${testId}-example-0`)).toHaveTextContent('900');
+  });
+
+  it('renders a schema-level example on an OpenRPC param schema', async () => {
+    const document = await example('wallet.openrpc.json');
+    if (document.kind !== 'jsonrpc') throw new Error('Expected a JSON-RPC fixture.');
+    render(JsonRpcDocument, { document });
+
+    const base = 'jsonrpc-document-method-getbalance-param-address-0-schema-root-property';
+    expect(screen.getByTestId(`${base}-examples`)).toHaveTextContent('example');
+    expect(screen.getByTestId(`${base}-example-0`)).toHaveTextContent(
+      '0x0000000000000000000000000000000000000001',
+    );
+  });
+
+  it('renders a schema-level example in a JSON Schema document, including an object value', async () => {
+    const document = await example('user-profile.schema.json');
+    if (document.kind !== 'jsonschema') throw new Error('Expected a JSON Schema fixture.');
+    render(JsonSchemaDocument, { document });
+
+    const nameExamples = screen.getByTestId(
+      'jsonschema-document-root-viewer-p-displayName-property-examples',
+    );
+    expect(nameExamples).toHaveTextContent('"Ada Lovelace"');
+
+    // An object example must render its shape, not `[object Object]`.
+    const addressExample = screen.getByTestId(
+      'jsonschema-document-schemas-0-viewer-root-property-example-0',
+    );
+    expect(addressExample).toHaveTextContent('"street"');
+    expect(addressExample).toHaveTextContent('"1 Bridge St"');
   });
 
   it('keeps hooks unique when JSON-RPC parameters and errors repeat identifiers', async () => {

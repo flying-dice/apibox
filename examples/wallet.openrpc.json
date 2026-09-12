@@ -42,7 +42,11 @@
           "name": "address",
           "description": "The account to query.",
           "required": true,
-          "schema": { "type": "string", "pattern": "^0x[a-fA-F0-9]{40}$" }
+          "schema": {
+            "type": "string",
+            "pattern": "^0x[a-fA-F0-9]{40}$",
+            "examples": ["0x0000000000000000000000000000000000000001"]
+          }
         },
         {
           "name": "block",

@@ -314,7 +314,7 @@ components:
       description: The fields accepted when creating a pet.
       required: [name]
       properties:
-        name: { type: string, minLength: 1 }
+        name: { type: string, minLength: 1, examples: [Rex] }
         tags:
           type: array
           items: { type: string }

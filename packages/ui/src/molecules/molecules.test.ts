@@ -234,6 +234,57 @@ describe('PropertyRow', () => {
     expect(screen.getByTestId('property-tags-xml')).toHaveTextContent('tag');
     expect(screen.getByTestId('property-tags-xml')).toHaveTextContent('wrapped');
   });
+
+  it('renders a single example as a labelled chip', () => {
+    render(PropertyRow, {
+      schema: { name: 'status', types: ['string'], examples: ['pending'] } satisfies SchemaNode,
+    });
+
+    const group = screen.getByTestId('property-status-examples');
+    expect(group).toHaveAttribute('role', 'group');
+    expect(group).toHaveTextContent('example');
+    expect(screen.getByTestId('property-status-example-0')).toHaveTextContent('"pending"');
+  });
+
+  it('labels the group as plural once there is more than one example', () => {
+    render(PropertyRow, {
+      schema: { name: 'status', types: ['string'], examples: ['a', 'b'] } satisfies SchemaNode,
+    });
+
+    expect(screen.getByTestId('property-status-examples')).toHaveTextContent('examples');
+    expect(screen.getByTestId('property-status-example-0')).toHaveTextContent('"a"');
+    expect(screen.getByTestId('property-status-example-1')).toHaveTextContent('"b"');
+  });
+
+  it('renders an object example readably rather than as [object Object]', () => {
+    render(PropertyRow, {
+      schema: {
+        name: 'address',
+        types: ['object'],
+        examples: [{ city: 'Leeds', zip: '1' }],
+      } satisfies SchemaNode,
+    });
+
+    const chip = screen.getByTestId('property-address-example-0');
+    expect(chip).toHaveTextContent('"city":"Leeds"');
+    expect(chip).not.toHaveTextContent('[object Object]');
+  });
+
+  it('truncates a long example to one line but keeps the full value reachable on hover', () => {
+    const long = { note: 'x'.repeat(200) };
+    render(PropertyRow, {
+      schema: { name: 'payload', types: ['object'], examples: [long] } satisfies SchemaNode,
+    });
+
+    const chip = screen.getByTestId('property-payload-example-0');
+    expect(chip.textContent?.length).toBeLessThan(JSON.stringify(long).length);
+    expect(chip.closest('[title]')).toHaveAttribute('title', JSON.stringify(long));
+  });
+
+  it('omits the examples group entirely when there are none', () => {
+    render(PropertyRow, { schema: { name: 'free', types: ['string'] } });
+    expect(screen.queryByTestId('property-free-examples')).not.toBeInTheDocument();
+  });
 });
 
 describe('TabBar', () => {

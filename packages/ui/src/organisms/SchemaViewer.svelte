@@ -35,13 +35,16 @@
    *
    * Skipped for a plain container — a bare `object` line above its own properties is noise,
    * so the tree starts at the properties a reader came for. It is drawn when the root
-   * carries something of its own: a description, composition, or a reference marker.
+   * carries something of its own: a description, composition, a reference marker, or (card
+   * 39) a schema-level example -- otherwise a root-only example, with no description to
+   * force this row, would be parsed and then silently dropped rather than merely hidden.
    */
   const showRoot = $derived(
     Boolean(
       schema &&
         (children.length === 0 ||
           schema.description ||
+          schema.examples?.length ||
           schema.compositions?.length ||
           schema.circularRef ||
           schema.unresolvedRef ||
