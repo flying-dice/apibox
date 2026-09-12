@@ -36,6 +36,31 @@ export interface ParseAsyncApiOptions {
 const UNRESOLVED_REF_KEY = 'x-apibox-unresolved-ref';
 
 /**
+ * Every `x-parser-*` key `@asyncapi/parser` stamps onto a document as it resolves it --
+ * lifted from the library's own `cjs/constants.js`, which is not part of its public API
+ * surface, so this list is a deliberate, reviewable copy rather than an import of an
+ * internal path that could move under us.
+ *
+ * An exact set, not an `x-parser-` prefix test: a document could genuinely author its own
+ * `x-parser-something` extension (unlikely, but indistinguishable from an injected one by
+ * prefix alone), and only these exact keys are ones the library is known to inject.
+ */
+const PARSER_INJECTED_EXTENSION_KEYS = new Set([
+  'x-parser-spec-parsed',
+  'x-parser-spec-stringified',
+  'x-parser-api-version',
+  'x-parser-message-name',
+  'x-parser-message-parsed',
+  'x-parser-schema-id',
+  'x-parser-original-schema-format',
+  'x-parser-original-payload',
+  'x-parser-original-traits',
+  'x-parser-circular',
+  'x-parser-circular-props',
+  'x-parser-unique-object-id',
+]);
+
+/**
  * Parse an AsyncAPI document.
  *
  * `@asyncapi/parser` presents 2.x and 3.x documents through one interface, which is the
@@ -66,10 +91,27 @@ export async function parseAsyncApi(
   options: ParseAsyncApiOptions = {},
 ): Promise<AsyncApiDocument> {
   const warnings: string[] = [];
-  const input = await preResolve(raw, options.location, warnings);
+  const { input, unresolved } = await preResolve(raw, options.location, warnings);
 
   const parser = new Parser();
-  const { document, diagnostics } = await parser.parse(input as never);
+  let { document, diagnostics } = await parser.parse(input as never);
+
+  // A broken `$ref` inside a schema normalises fine as an inert marker object -- JSON Schema
+  // has no required keywords of its own. But the very same marker substituted where the
+  // *AsyncAPI* meta-schema itself has required fields (a `servers` entry needs `host` and
+  // `protocol`; see the module doc comment) still fails full-document validation, and
+  // `@asyncapi/parser` reports that the same way it reports every other invalid document:
+  // no model at all. Rather than encode per-position knowledge of what each shape requires
+  // (fragile -- see card 35's own reasoning), drop exactly the entries whose marker is
+  // implicated by a validation error and retry once. Everything else -- most of all card
+  // 34's schema-position substitution -- never reaches this branch, since `document` is
+  // already defined by the time it would.
+  if (!document && unresolved.length > 0) {
+    const dropped = dropInvalidatingMarkers(input, unresolved, diagnostics, warnings);
+    if (dropped) {
+      ({ document, diagnostics } = await parser.parse(input as never));
+    }
+  }
 
   warnings.push(
     ...diagnostics
@@ -272,6 +314,12 @@ export async function parseAsyncApi(
   };
 }
 
+/** A `$ref` `preResolve` could not resolve, and where it was found. */
+interface UnresolvedRef {
+  path: string[];
+  ref: string;
+}
+
 /**
  * Find every `$ref` `@asyncapi/parser` would fail to resolve, and patch *only* those into
  * an {@link UNRESOLVED_REF_KEY} marker in an otherwise-untouched clone of the original
@@ -287,27 +335,103 @@ export async function parseAsyncApi(
  *
  * Not an object is left untouched rather than rejected here — `@asyncapi/parser` gives a
  * clearer, format-specific error for that than this function could.
+ *
+ * The returned `unresolved` list is what {@link dropInvalidatingMarkers} needs afterwards to
+ * tell a marker that just failed validation apart from one that was never touched.
  */
 async function preResolve(
   raw: unknown,
   location: string | undefined,
   warnings: string[],
-): Promise<unknown> {
+): Promise<{ input: unknown; unresolved: UnresolvedRef[] }> {
   const root = asRecord(raw);
-  if (!root) return raw;
+  if (!root) return { input: raw, unresolved: [] };
 
-  const unresolved: Array<{ path: string[]; ref: string }> = [];
+  const unresolved: UnresolvedRef[] = [];
   await dereferenceDocument(root, location, warnings, {
     // Irrelevant to correctness here -- the resolved output is discarded -- but avoids
     // pointlessly building native cyclic objects for a genuinely circular $ref.
     circular: 'ignore',
     onUnresolved: (path, ref) => unresolved.push({ path, ref }),
   });
-  if (unresolved.length === 0) return raw;
+  if (unresolved.length === 0) return { input: raw, unresolved };
 
   const input = structuredClone(root);
   for (const { path, ref } of unresolved) stubUnresolvedRef(input, path, ref);
-  return input;
+  return { input, unresolved };
+}
+
+/**
+ * Drop, in place, every {@link UNRESOLVED_REF_KEY} marker that a failed parse's diagnostics
+ * blame for an error at that marker's own path -- card 35's chosen fix for a broken `$ref`
+ * sitting where the target shape has required fields, which the marker alone cannot satisfy.
+ *
+ * Matching is by exact path rather than "the error is somewhere under this marker": a
+ * diagnostic's path names the object that failed validation, which for a required-field
+ * miss is the marker itself, not a descendant of it. A diagnostic whose path does not match
+ * any marker is left alone entirely -- it is either an unrelated problem the final parse
+ * attempt (or its own warnings) will still surface, or the very "no document" fallback this
+ * function exists to avoid triggering unnecessarily.
+ *
+ * Returns whether anything was actually dropped, so the caller knows whether a retry is
+ * worth the second `parser.parse` call.
+ */
+function dropInvalidatingMarkers(
+  input: unknown,
+  unresolved: UnresolvedRef[],
+  // `path` is typed loosely because diagnostics come from Spectral (via @asyncapi/parser),
+  // whose `JsonPath` allows a numeric array index segment alongside a string property key.
+  diagnostics: Array<{ severity: number; path?: Array<string | number>; message: string }>,
+  warnings: string[],
+): boolean {
+  const root = asRecord(input);
+  if (!root) return false;
+
+  const refByPath = new Map(unresolved.map((u) => [u.path.join('.'), u.ref]));
+  let changed = false;
+
+  for (const diagnostic of diagnostics) {
+    if (diagnostic.severity !== 0) continue; // 0 = error
+    const path = diagnostic.path?.map(String) ?? [];
+    const key = path.join('.');
+    const ref = refByPath.get(key);
+    if (ref === undefined) continue;
+
+    if (deleteAt(root, path)) {
+      warnings.push(
+        `Could not resolve $ref at ${key}: ${ref} -- the entry was dropped, since a placeholder would not satisfy "${diagnostic.message}".`,
+      );
+      changed = true;
+    }
+  }
+
+  return changed;
+}
+
+/** Remove the value at `path`, in place. Mirrors {@link stubUnresolvedRef}'s navigation. */
+function deleteAt(root: Record<string, unknown>, path: string[]): boolean {
+  if (path.length === 0) return false;
+
+  let parent: unknown = root;
+  for (const segment of path.slice(0, -1)) {
+    parent = at(parent, segment);
+    if (parent === undefined || parent === null) return false;
+  }
+
+  const key = path[path.length - 1];
+  if (key === undefined) return false;
+
+  if (Array.isArray(parent)) {
+    const index = Number(key);
+    if (!Number.isInteger(index) || index < 0 || index >= parent.length) return false;
+    parent.splice(index, 1);
+    return true;
+  }
+
+  const record = asRecord(parent);
+  if (!record) return false;
+  delete record[key];
+  return true;
 }
 
 /** Replace the `$ref` at `path` with an {@link UNRESOLVED_REF_KEY} marker, in place. */
@@ -354,13 +478,55 @@ function restoreUnresolvedRefs(node: unknown, seen: Set<object> = new Set()): un
   return record;
 }
 
-/** `normaliseSchema`, restoring any {@link UNRESOLVED_REF_KEY} marker first. */
+/**
+ * Strip {@link PARSER_INJECTED_EXTENSION_KEYS} out of a schema tree, without mutating the
+ * `@asyncapi/parser` model objects it is built from.
+ *
+ * Deletion in place was considered and rejected: the same underlying JSON object can be
+ * reached both through a message's payload and through `components.schemas` (identity is
+ * shared across a resolved `$ref`, the same fact `preResolve`'s doc comment relies on for
+ * security-scheme names), and `Schema.id()` reads `x-parser-schema-id` off that same object
+ * lazily. Deleting the key before every caller of `.id()` has run would be an ordering trap.
+ * Building a filtered copy instead -- cycle-safe by object identity, the same way
+ * {@link restoreUnresolvedRefs} is -- sidesteps that entirely.
+ *
+ * This lives here rather than as a blanket filter in `normaliseSchema` (packages/core/src/
+ * schema.ts) because that function is shared by all four formats: `x-parser-*` is only ever
+ * injected machinery for AsyncAPI, and filtering it there would just as readily swallow an
+ * OpenAPI document that happens to genuinely author an `x-parser-*` extension of its own.
+ */
+function stripParserExtensions(node: unknown, seen: Map<object, unknown> = new Map()): unknown {
+  if (typeof node !== 'object' || node === null) return node;
+  const cached = seen.get(node);
+  if (cached !== undefined) return cached;
+
+  if (Array.isArray(node)) {
+    const copy: unknown[] = [];
+    seen.set(node, copy);
+    for (const item of node) copy.push(stripParserExtensions(item, seen));
+    return copy;
+  }
+
+  const record = node as Record<string, unknown>;
+  const copy: Record<string, unknown> = {};
+  seen.set(node, copy);
+  for (const [key, value] of Object.entries(record)) {
+    if (PARSER_INJECTED_EXTENSION_KEYS.has(key)) continue;
+    copy[key] = stripParserExtensions(value, seen);
+  }
+  return copy;
+}
+
+/**
+ * `normaliseSchema`, restoring any {@link UNRESOLVED_REF_KEY} marker and stripping injected
+ * `x-parser-*` extensions first.
+ */
 function normaliseAsyncApiSchema(
   raw: unknown,
   options?: Parameters<typeof normaliseSchema>[1],
   name?: string,
 ): SchemaNode | undefined {
-  return normaliseSchema(restoreUnresolvedRefs(raw), options, name);
+  return normaliseSchema(stripParserExtensions(restoreUnresolvedRefs(raw)), options, name);
 }
 
 /** AsyncAPI 2.x channels have no title; the accessor only exists on the 3.x model. */

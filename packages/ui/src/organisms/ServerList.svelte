@@ -41,7 +41,7 @@
               {/each}
             </p>
           {/if}
-          <BindingList bindings={server.bindings} testId="{testId}-{index}-bindings" />
+          <BindingList bindings={server.bindings} testId="{testId}-{index}-bindings" label="Server" />
         </article>
       {/each}
     </div>

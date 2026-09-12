@@ -15,13 +15,20 @@
    * for extensions. A field whose value is itself an object (e.g. Kafka's `groupId` schema)
    * is shown as compact JSON rather than walked further -- one more tree to expand here
    * would cost more chrome than the value is worth at this density.
+   *
+   * `label` names the location a caller is rendering (channel, operation, message, server).
+   * It matters because a card can legitimately show two binding lists side by side -- e.g. an
+   * operation's own bindings plus the channel bindings it inherits -- and without it those rows
+   * are indistinguishable even though they mean different things. It renders inline with the
+   * protocol badge rather than as its own heading line, so labelling costs no extra row height.
    */
   interface Props {
     bindings: readonly BindingInfo[] | undefined;
     testId: string;
+    label?: string;
   }
 
-  const { bindings, testId }: Props = $props();
+  const { bindings, testId, label }: Props = $props();
 
   function formatValue(value: unknown): string {
     return typeof value === 'string' ? value : JSON.stringify(value);
@@ -33,6 +40,9 @@
     {#each bindings as binding (binding.protocol)}
       <div class="binding" data-testid="{testId}-{binding.protocol}">
         <span class="heading">
+          {#if label}
+            <span class="location" data-testid="{testId}-{binding.protocol}-location">{label}</span>
+          {/if}
           <Badge variant="outline" small testId="{testId}-{binding.protocol}-protocol">
             {binding.protocol}
           </Badge>
@@ -82,6 +92,12 @@
   .version {
     font-size: var(--apibox-font-size-sm);
     color: var(--apibox-fg-muted);
+  }
+
+  .location {
+    font-size: var(--apibox-font-size-sm);
+    color: var(--apibox-fg-muted);
+    text-transform: uppercase;
   }
 
   .fields {

@@ -1439,6 +1439,135 @@ describe('AsyncAPI', () => {
     expect(doc.warnings).toEqual([]);
   });
 
+  describe('a broken $ref in a required-field position (card 35)', () => {
+    // Card 34's marker degrades a broken `$ref` into an inert object, which is fine inside
+    // a schema (JSON Schema has no required keywords of its own) but not where the AsyncAPI
+    // meta-schema itself has required fields -- a Server Object needs `host` and `protocol`,
+    // which the marker does not supply, so `@asyncapi/parser` fails the whole document on
+    // *that* just as it did on the original broken `$ref`.
+    const brokenServerDoc = {
+      asyncapi: '3.0.0',
+      info: { title: 'Broken server ref', version: '1.0.0' },
+      servers: {
+        mosquitto: { $ref: '#/components/servers/DoesNotExist' },
+      },
+      channels: {
+        readings: { address: 'readings' },
+      },
+      operations: {
+        receiveReadings: { action: 'receive', channel: { $ref: '#/channels/readings' } },
+      },
+    };
+
+    it('still parses, naming the broken pointer, instead of failing the whole document', async () => {
+      const doc = (await parseApiDocument(brokenServerDoc)) as AsyncApiDocument;
+
+      expect(doc.warnings).toContainEqual(
+        expect.stringMatching(/Could not resolve \$ref at servers\.mosquitto.*DoesNotExist/),
+      );
+      // Everything else still renders.
+      expect(doc.operations).toHaveLength(1);
+      expect(doc.operations[0]?.channelAddress).toBe('readings');
+    });
+
+    it('drops the entry the marker could not stand in for, rather than fabricate a fake server', async () => {
+      const doc = (await parseApiDocument(brokenServerDoc)) as AsyncApiDocument;
+
+      // A shape-aware stub was rejected in favour of dropping: it would mean encoding, and
+      // maintaining, per-position knowledge of what every AsyncAPI object requires. Dropping
+      // is general and honest about what happened -- the reader is told via the warning
+      // above, not left looking at an invented server that was never authored.
+      expect(doc.servers).toEqual([]);
+    });
+
+    it('leaves card 34s own schema-position case untouched: still a marked property, not a dropped one', async () => {
+      // Same shape as the "degrades a dangling internal $ref" test above, confirming the new
+      // retry path is never even entered when the marker already satisfies validation --
+      // `document` is defined on the first `parser.parse` and the drop-and-retry branch
+      // never runs.
+      const doc = (await parseApiDocument({
+        asyncapi: '3.0.0',
+        info: { title: 'Broken ref', version: '1.0.0' },
+        channels: {
+          readings: {
+            address: 'readings',
+            messages: { reading: { $ref: '#/components/messages/Reading' } },
+          },
+        },
+        operations: {
+          receiveReadings: { action: 'receive', channel: { $ref: '#/channels/readings' } },
+        },
+        components: {
+          messages: {
+            Reading: {
+              name: 'reading',
+              payload: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  external: { $ref: '#/components/schemas/DoesNotExist' },
+                },
+              },
+            },
+          },
+        },
+      })) as AsyncApiDocument;
+
+      const payload = doc.operations[0]?.messages[0]?.payload;
+      expect(payload?.properties?.map((p) => p.name)).toEqual(['id', 'external']);
+      const external = payload?.properties?.find((p) => p.name === 'external');
+      expect(external?.unresolvedRef).toBe('#/components/schemas/DoesNotExist');
+      expect(doc.warnings).not.toContainEqual(expect.stringMatching(/dropped/));
+    });
+  });
+
+  describe('parser-injected extensions (card 36)', () => {
+    it('does not surface x-parser-* extensions the library injects while resolving', async () => {
+      // The real fixture already carries this: @asyncapi/parser stamps `x-parser-schema-id`
+      // onto every schema and subschema it touches, including nested properties like these,
+      // not only anonymous top-level ones.
+      const doc = await load();
+      const receive = doc.operations.find((o) => o.action === 'receive');
+      const lumens = receive?.messages[0]?.payload?.properties?.find((p) => p.name === 'lumens');
+      expect(lumens?.extensions?.some((e) => e.key.startsWith('x-parser-'))).toBeFalsy();
+    });
+
+    it('still renders a genuinely authored x- extension alongside a parser-injected one', async () => {
+      const doc = (await parseApiDocument({
+        asyncapi: '3.0.0',
+        info: { title: 'Extension test', version: '1.0.0' },
+        channels: {
+          readings: {
+            address: 'readings',
+            messages: { reading: { $ref: '#/components/messages/Reading' } },
+          },
+        },
+        operations: {
+          receiveReadings: { action: 'receive', channel: { $ref: '#/channels/readings' } },
+        },
+        components: {
+          messages: {
+            Reading: {
+              name: 'reading',
+              payload: {
+                type: 'object',
+                'x-internal-note': 'authored extension',
+                properties: { lumens: { type: 'integer' } },
+              },
+            },
+          },
+        },
+      })) as AsyncApiDocument;
+
+      const payload = doc.operations[0]?.messages[0]?.payload;
+      // The parser injects its own `x-parser-schema-id` onto this very object -- filtered --
+      // while the extension actually authored in the document survives untouched.
+      expect(payload?.extensions).toEqual([
+        { key: 'x-internal-note', value: 'authored extension' },
+      ]);
+    });
+  });
+
   describe('bindings', () => {
     it('parses MQTT bindings at server, channel, operation and message level', async () => {
       const doc = await load();

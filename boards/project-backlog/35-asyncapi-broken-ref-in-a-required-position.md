@@ -1,9 +1,13 @@
 ---
-column: backlog
+column: review
 labels: [core, asyncapi]
 priority: low
 package: core
-updatedAt: 2026-09-12T02:05:00.000Z
+agent: claude
+live: false
+status: Drop-and-warn for refs in required positions
+progress: 100
+updatedAt: 2026-09-12T04:20:00.000Z
 ---
 # A broken $ref in a required position still fails the document
 
@@ -28,7 +32,8 @@ general claim.
 
 ## Checklist
 
-- [ ] Reproduce with a broken `$ref` in a `servers` entry, as a failing test first
-- [ ] Decide between a shape-aware stub and dropping the entry, and record why
-- [ ] Confirm the reader is still told which pointer broke
-- [ ] Keep card 34's schema-position behaviour unchanged
+- [x] Reproduce with a broken `$ref` in a `servers` entry, as a failing test first
+- [x] Decide between a shape-aware stub and dropping the entry, and record why
+- [x] Confirm the reader is still told which pointer broke
+- [x] Keep card 34's schema-position behaviour unchanged
+- **claude** (2026-09-12T05:10:00.000Z): Fixed with drop-and-warn rather than a shape-aware stub. A stub would need per-position knowledge of what each AsyncAPI object requires — Server, Channel, SecurityScheme and so on — which is exactly the ageing risk this card named. Instead the parser reads the validation diagnostics, matches a severity-0 diagnostic's path against the known unresolved-ref positions, drops that entry and retries once. General across every position, encoding no spec-shape knowledge. It engages only when the plain marker genuinely fails validation, so card 34's schema-position behaviour never reaches this branch — pinned by a regression test.

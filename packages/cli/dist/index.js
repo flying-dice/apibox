@@ -630,11 +630,31 @@ function isExtensionKey(key) {
 
 // packages/core/src/formats/asyncapi/index.ts
 var UNRESOLVED_REF_KEY = "x-apibox-unresolved-ref";
+var PARSER_INJECTED_EXTENSION_KEYS = new Set([
+  "x-parser-spec-parsed",
+  "x-parser-spec-stringified",
+  "x-parser-api-version",
+  "x-parser-message-name",
+  "x-parser-message-parsed",
+  "x-parser-schema-id",
+  "x-parser-original-schema-format",
+  "x-parser-original-payload",
+  "x-parser-original-traits",
+  "x-parser-circular",
+  "x-parser-circular-props",
+  "x-parser-unique-object-id"
+]);
 async function parseAsyncApi(raw, options = {}) {
   const warnings = [];
-  const input = await preResolve(raw, options.location, warnings);
+  const { input, unresolved } = await preResolve(raw, options.location, warnings);
   const parser = new Parser;
-  const { document, diagnostics } = await parser.parse(input);
+  let { document, diagnostics } = await parser.parse(input);
+  if (!document && unresolved.length > 0) {
+    const dropped = dropInvalidatingMarkers(input, unresolved, diagnostics, warnings);
+    if (dropped) {
+      ({ document, diagnostics } = await parser.parse(input));
+    }
+  }
   warnings.push(...diagnostics.filter((d) => d.severity <= 1).map((d) => `${d.message}${d.path?.length ? ` (at ${d.path.join(".")})` : ""}`));
   if (!document) {
     throw new UnsupportedDocumentError(`The AsyncAPI document could not be parsed.${warnings.length ? ` ${warnings[0]}` : ""}`);
@@ -733,18 +753,64 @@ async function parseAsyncApi(raw, options = {}) {
 async function preResolve(raw, location, warnings) {
   const root = asRecord(raw);
   if (!root)
-    return raw;
+    return { input: raw, unresolved: [] };
   const unresolved = [];
   await dereferenceDocument(root, location, warnings, {
     circular: "ignore",
     onUnresolved: (path, ref) => unresolved.push({ path, ref })
   });
   if (unresolved.length === 0)
-    return raw;
+    return { input: raw, unresolved };
   const input = structuredClone(root);
   for (const { path, ref } of unresolved)
     stubUnresolvedRef(input, path, ref);
-  return input;
+  return { input, unresolved };
+}
+function dropInvalidatingMarkers(input, unresolved, diagnostics, warnings) {
+  const root = asRecord(input);
+  if (!root)
+    return false;
+  const refByPath = new Map(unresolved.map((u) => [u.path.join("."), u.ref]));
+  let changed = false;
+  for (const diagnostic of diagnostics) {
+    if (diagnostic.severity !== 0)
+      continue;
+    const path = diagnostic.path?.map(String) ?? [];
+    const key = path.join(".");
+    const ref = refByPath.get(key);
+    if (ref === undefined)
+      continue;
+    if (deleteAt(root, path)) {
+      warnings.push(`Could not resolve $ref at ${key}: ${ref} -- the entry was dropped, since a placeholder would not satisfy "${diagnostic.message}".`);
+      changed = true;
+    }
+  }
+  return changed;
+}
+function deleteAt(root, path) {
+  if (path.length === 0)
+    return false;
+  let parent = root;
+  for (const segment of path.slice(0, -1)) {
+    parent = at(parent, segment);
+    if (parent === undefined || parent === null)
+      return false;
+  }
+  const key = path[path.length - 1];
+  if (key === undefined)
+    return false;
+  if (Array.isArray(parent)) {
+    const index = Number(key);
+    if (!Number.isInteger(index) || index < 0 || index >= parent.length)
+      return false;
+    parent.splice(index, 1);
+    return true;
+  }
+  const record = asRecord(parent);
+  if (!record)
+    return false;
+  delete record[key];
+  return true;
 }
 function stubUnresolvedRef(root, path, ref) {
   if (path.length === 0)
@@ -780,8 +846,31 @@ function restoreUnresolvedRefs(node, seen = new Set) {
     record[key] = restoreUnresolvedRefs(record[key], seen);
   return record;
 }
+function stripParserExtensions(node, seen = new Map) {
+  if (typeof node !== "object" || node === null)
+    return node;
+  const cached = seen.get(node);
+  if (cached !== undefined)
+    return cached;
+  if (Array.isArray(node)) {
+    const copy = [];
+    seen.set(node, copy);
+    for (const item of node)
+      copy.push(stripParserExtensions(item, seen));
+    return copy;
+  }
+  const record = node;
+  const copy = {};
+  seen.set(node, copy);
+  for (const [key, value] of Object.entries(record)) {
+    if (PARSER_INJECTED_EXTENSION_KEYS.has(key))
+      continue;
+    copy[key] = stripParserExtensions(value, seen);
+  }
+  return copy;
+}
 function normaliseAsyncApiSchema(raw, options, name) {
-  return normaliseSchema(restoreUnresolvedRefs(raw), options, name);
+  return normaliseSchema(stripParserExtensions(restoreUnresolvedRefs(raw)), options, name);
 }
 function readTitle(channel) {
   const titled = channel;

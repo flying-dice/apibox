@@ -71,7 +71,7 @@
             <p data-testid="{testId}-channel-{index}-description">{channel.description}</p>
           {/if}
           <ParameterTable parameters={channel.parameters} testId="{testId}-channel-{index}-parameters" />
-          <BindingList bindings={channel.bindings} testId="{testId}-channel-{index}-bindings" />
+          <BindingList bindings={channel.bindings} testId="{testId}-channel-{index}-bindings" label="Channel" />
         </article>
       {/each}
     </section>

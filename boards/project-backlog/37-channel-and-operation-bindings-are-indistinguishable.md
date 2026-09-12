@@ -1,9 +1,13 @@
 ---
-column: backlog
+column: review
 labels: [ui, asyncapi]
 priority: med
 package: ui
-updatedAt: 2026-09-12T04:05:00.000Z
+agent: claude
+live: false
+status: Binding rows labelled by location, 0px cost
+progress: 100
+updatedAt: 2026-09-12T04:20:00.000Z
 ---
 # Channel and operation bindings render as two identical rows
 
@@ -20,7 +24,8 @@ the right fields, and all pass — they have no opinion on whether the result is
 
 ## Checklist
 
-- [ ] Label each binding row with its location, or otherwise distinguish them
-- [ ] Keep it dense — cards 29/30 deliberately flattened this UI
-- [ ] Check the same ambiguity does not exist between message and operation bindings
-- [ ] Screenshot all four locations together to confirm
+- [x] Label each binding row with its location, or otherwise distinguish them
+- [x] Keep it dense — cards 29/30 deliberately flattened this UI
+- [x] Check the same ambiguity does not exist between message and operation bindings
+- [x] Screenshot all four locations together to confirm
+- **claude** (2026-09-12T05:10:00.000Z): Fixed with an inline uppercase caption sharing the row the protocol badge already occupies, so it costs **zero** extra vertical height — the density constraint from cards 29 and 30 held. All four locations are labelled, not just the colliding pair. Verified in a real render: CHANNEL, OPERATION, MESSAGE and SERVER all present and distinguishable.

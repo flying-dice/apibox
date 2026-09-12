@@ -43,7 +43,7 @@
   {#if message.examples?.length}
     <ExampleViewer examples={message.examples} testId="{testId}-examples" />
   {/if}
-  <BindingList bindings={message.bindings} testId="{testId}-bindings" />
+  <BindingList bindings={message.bindings} testId="{testId}-bindings" label="Message" />
 </section>
 
 <style>

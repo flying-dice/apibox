@@ -52,8 +52,12 @@
   {/if}
 
   <ParameterTable parameters={operation.parameters} testId="{testId}-parameters" />
-  <BindingList bindings={operation.channelBindings} testId="{testId}-channel-bindings" />
-  <BindingList bindings={operation.bindings} testId="{testId}-bindings" />
+  <BindingList
+    bindings={operation.channelBindings}
+    testId="{testId}-channel-bindings"
+    label="Channel"
+  />
+  <BindingList bindings={operation.bindings} testId="{testId}-bindings" label="Operation" />
   {#each operation.messages as message, index (`${message.name}-${index}`)}
     <AsyncApiMessage {message} testId="{testId}-message-{index}" />
   {/each}
