@@ -1,6 +1,8 @@
-- [Supported formats & JSON Schema ask](project_supported_formats.md) — four formats: three shipped, standalone JSON Schema added 2026-09-11
-- [Spec coverage baseline](project_spec_coverage_baseline.md) — measured 2026-09-11: OpenAPI ~45%, OpenRPC ~64%, AsyncAPI ~35%, bindings 0%
+- [Supported formats & JSON Schema](project_supported_formats.md) — four formats; JSON Schema added 2026-09-11
+- [Spec coverage baseline](project_spec_coverage_baseline.md) — historical; superseded by the 2026-09-12 re-audits
 - [Repo conventions for planning](feedback_repodoc_not_docs_bots.md) — plan in RepoDoc boards/decisions, not docs/bots
-- [Subagents create stray worktrees](feedback_subagent_worktrees.md) — verify where a subagent's work actually landed before trusting "done"
-- [Subagent write guard & late reports](feedback_subagent_write_guard.md) — Write/Edit is blocked; brief agents to use Bash heredocs
-- [Verify UI by looking, not by tests](feedback_verify_ui_visually.md) — screenshot real builds; several defects passed every test
+- [Never sign off cards](feedback_never_sign_off.md) — never set peer-reviewed; the user tests and signs off personally
+- [Subagents create stray worktrees](feedback_subagent_worktrees.md) — verify where a subagent's work actually landed
+- [Subagent write guard & late reports](feedback_subagent_write_guard.md) — Write/Edit blocked; brief agents to use Bash heredocs
+- [Verify UI by looking, not by tests](feedback_verify_ui_visually.md) — screenshot real builds; five defects passed a green suite
+- [Model changes must teach the validator](feedback_validator_trap.md) — a new field failing isApiDocument shows as a blank viewer, not a test failure
