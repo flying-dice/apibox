@@ -100,6 +100,13 @@ export function childNodes(schema: SchemaNode): ChildNode[] {
     children.push({ key: 'contains', name: 'contains', schema: schema.contains });
   }
 
+  // `contentSchema` is itself a schema -- the shape of the *decoded* content named by
+  // `contentEncoding`/`contentMediaType` (both rendered as chips on the owning row, not
+  // here) -- so it expands like `propertyNames`/`contains` above.
+  if (schema.contentSchema) {
+    children.push({ key: 'content-schema', name: 'content', schema: schema.contentSchema });
+  }
+
   for (const entry of schema.dependentSchemas ?? []) {
     push(
       'dependent-schemas',

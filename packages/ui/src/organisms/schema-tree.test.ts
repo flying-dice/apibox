@@ -188,4 +188,21 @@ describe('childNodes', () => {
     // The boolean form is open/closed, not a schema — there is nothing to descend into.
     expect(childNodes({ types: ['object'], allowsUnevaluatedProperties: false })).toEqual([]);
   });
+
+  it('expands contentSchema into its own branch (card 40)', () => {
+    const schema: SchemaNode = {
+      types: ['string'],
+      contentEncoding: 'base64',
+      contentMediaType: 'application/json',
+      contentSchema: { types: ['object'] },
+    };
+
+    expect(childNodes(schema).map((child) => child.key)).toEqual(['content-schema']);
+  });
+
+  it('does not expand contentEncoding/contentMediaType alone -- they are annotations, not structure', () => {
+    expect(
+      childNodes({ types: ['string'], contentEncoding: 'base64', contentMediaType: 'image/png' }),
+    ).toEqual([]);
+  });
 });

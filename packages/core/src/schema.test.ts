@@ -405,6 +405,107 @@ describe('normaliseSchema', () => {
     const node = normaliseSchema({ oneOf: [{ type: 'string' }], discriminator: {} });
     expect(node?.discriminator).toBeUndefined();
   });
+
+  describe('content vocabulary (card 40)', () => {
+    it('reads contentEncoding and contentMediaType as annotations, not structure', () => {
+      const node = normaliseSchema({
+        type: 'string',
+        contentEncoding: 'base64',
+        contentMediaType: 'image/png',
+      });
+      expect(node?.contentEncoding).toBe('base64');
+      expect(node?.contentMediaType).toBe('image/png');
+      expect(node?.contentSchema).toBeUndefined();
+    });
+
+    it('nests contentSchema as a real schema, including its own properties', () => {
+      // The card-23 idiom: a schema-valued keyword walks into a child SchemaNode, same as
+      // `propertyNames`/`contains`, rather than being flattened into a chip.
+      const node = normaliseSchema({
+        type: 'string',
+        contentEncoding: 'base64',
+        contentMediaType: 'application/json',
+        contentSchema: {
+          type: 'object',
+          required: ['sub'],
+          properties: { sub: { type: 'string' } },
+        },
+      });
+
+      expect(node?.contentSchema?.types).toEqual(['object']);
+      expect(node?.contentSchema?.properties?.map((p) => p.name)).toEqual(['sub']);
+      expect(node?.contentSchema?.properties?.[0]?.required).toBe(true);
+    });
+
+    it('does not invent a contentSchema field when the keyword is absent', () => {
+      const node = normaliseSchema({ type: 'string' });
+      expect(node?.contentSchema).toBeUndefined();
+    });
+  });
+
+  describe('nested $id, $anchor, $dynamicRef, $dynamicAnchor (card 40)', () => {
+    it("captures a nested $defs entry's own $id, distinct from a document root's", () => {
+      // The bundling case the audit called out: a $defs entry is independently addressable
+      // by its own $id, which walk() must not conflate with the document root's.
+      const node = normaliseSchema(
+        { $id: 'https://example.com/schemas/address.json', type: 'object' },
+        {},
+        'Address',
+      );
+      expect(node?.schemaId).toBe('https://example.com/schemas/address.json');
+    });
+
+    it('reads the draft-04 `id` spelling the same way as `$id`', () => {
+      const node = normaliseSchema({ id: 'https://example.com/legacy.json', type: 'string' });
+      expect(node?.schemaId).toBe('https://example.com/legacy.json');
+    });
+
+    it('omits schemaId when the node declares none', () => {
+      const node = normaliseSchema({ type: 'string' });
+      expect(node?.schemaId).toBeUndefined();
+    });
+
+    it('reads $anchor, $dynamicRef and $dynamicAnchor as their raw keyword values', () => {
+      const node = normaliseSchema({
+        $anchor: 'nodeAnchor',
+        $dynamicAnchor: 'meta',
+        type: 'object',
+      });
+      expect(node?.anchor).toBe('nodeAnchor');
+      expect(node?.dynamicAnchor).toBe('meta');
+
+      const ref = normaliseSchema({ $dynamicRef: '#meta' });
+      expect(ref?.dynamicRef).toBe('#meta');
+    });
+  });
+
+  // `normaliseSchema` is called identically by every format's parser (OpenAPI components,
+  // AsyncAPI message payloads, JSON-RPC method params/results, and the JSON Schema format
+  // itself) -- there is no per-format branch in `schema.ts`. A schema pulled from any of
+  // those contexts therefore picks up every field added by this card the same way a
+  // standalone JSON Schema document does; nothing here is JSON-Schema-only.
+  it('reads every card-40 field the same way regardless of which format handed it the schema', () => {
+    // Shape typical of an OpenAPI/AsyncAPI/JSON-RPC component schema, not a bare JSON
+    // Schema document -- proving the fields are shared model, not format-specific parsing.
+    const node = normaliseSchema({
+      $id: 'https://example.com/component.json',
+      $anchor: 'componentAnchor',
+      $dynamicRef: '#extend',
+      $dynamicAnchor: 'extend',
+      type: 'string',
+      contentEncoding: 'base64',
+      contentMediaType: 'application/octet-stream',
+      contentSchema: { type: 'string' },
+    });
+
+    expect(node?.schemaId).toBe('https://example.com/component.json');
+    expect(node?.anchor).toBe('componentAnchor');
+    expect(node?.dynamicRef).toBe('#extend');
+    expect(node?.dynamicAnchor).toBe('extend');
+    expect(node?.contentEncoding).toBe('base64');
+    expect(node?.contentMediaType).toBe('application/octet-stream');
+    expect(node?.contentSchema?.types).toEqual(['string']);
+  });
 });
 
 describe('schemaTypeLabel', () => {

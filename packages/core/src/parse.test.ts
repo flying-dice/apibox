@@ -245,6 +245,93 @@ describe('JSON Schema', () => {
       expect(doc.root?.properties?.[0]?.description).toBe('A property description.');
     });
   });
+
+  describe('content vocabulary and remaining core keywords (card 40)', () => {
+    it('models the content vocabulary, including a nested contentSchema', async () => {
+      const doc = (await parseApiDocument(
+        {
+          $schema: 'https://json-schema.org/draft/2020-12/schema',
+          type: 'object',
+          properties: {
+            avatar: {
+              type: 'string',
+              contentEncoding: 'base64',
+              contentMediaType: 'image/png',
+            },
+            payload: {
+              type: 'string',
+              contentEncoding: 'base64',
+              contentMediaType: 'application/json',
+              contentSchema: {
+                type: 'object',
+                required: ['userId'],
+                properties: { userId: { type: 'string' } },
+              },
+            },
+          },
+        },
+        { format: 'jsonschema' },
+      )) as JsonSchemaDocument;
+
+      const avatar = doc.root?.properties?.find((p) => p.name === 'avatar');
+      expect(avatar?.contentEncoding).toBe('base64');
+      expect(avatar?.contentMediaType).toBe('image/png');
+      expect(avatar?.contentSchema).toBeUndefined();
+
+      const payload = doc.root?.properties?.find((p) => p.name === 'payload');
+      expect(payload?.contentSchema?.types).toEqual(['object']);
+      expect(payload?.contentSchema?.properties?.map((p) => p.name)).toEqual(['userId']);
+      expect(payload?.contentSchema?.properties?.[0]?.required).toBe(true);
+    });
+
+    it("surfaces a per-$defs $id in a bundle, distinct from the document root's", async () => {
+      // The bundling case the audit flagged: a single file combining several independently
+      // addressable schemas, each with its own $id under $defs.
+      const doc = (await parseApiDocument(
+        {
+          $schema: 'https://json-schema.org/draft/2020-12/schema',
+          $id: 'https://example.com/schemas/bundle.json',
+          type: 'object',
+          properties: { address: { $ref: '#/$defs/Address' } },
+          $defs: {
+            Address: {
+              $id: 'https://example.com/schemas/address.json',
+              type: 'object',
+              properties: { city: { type: 'string' } },
+            },
+          },
+        },
+        { format: 'jsonschema' },
+      )) as JsonSchemaDocument;
+
+      expect(doc.schemaId).toBe('https://example.com/schemas/bundle.json');
+      // The root node's own schemaId is stripped -- it is already shown once, at the
+      // document level, and stripping it prevents rendering the same value twice.
+      expect(doc.root?.schemaId).toBeUndefined();
+
+      const address = doc.schemas.find((s) => s.name === 'Address');
+      expect(address?.schemaId).toBe('https://example.com/schemas/address.json');
+    });
+
+    it('reads $anchor, $dynamicRef and $dynamicAnchor', async () => {
+      const doc = (await parseApiDocument(
+        {
+          $schema: 'https://json-schema.org/draft/2020-12/schema',
+          $anchor: 'root',
+          type: 'object',
+          properties: {
+            extensible: { $dynamicRef: '#meta', $dynamicAnchor: 'meta' },
+          },
+        },
+        { format: 'jsonschema' },
+      )) as JsonSchemaDocument;
+
+      expect(doc.root?.anchor).toBe('root');
+      const extensible = doc.root?.properties?.find((p) => p.name === 'extensible');
+      expect(extensible?.dynamicRef).toBe('#meta');
+      expect(extensible?.dynamicAnchor).toBe('meta');
+    });
+  });
 });
 
 describe('OpenAPI', () => {
@@ -1321,6 +1408,31 @@ describe('OpenAPI', () => {
       expect(closed?.allowsAdditionalProperties).toBe(false);
       expect(open?.allowsAdditionalProperties).toBeUndefined();
     });
+  });
+
+  it('carries card-40 fields ($id, $anchor, content vocabulary) through a component schema (proves the shared model change reaches OpenAPI, not only standalone JSON Schema)', async () => {
+    const doc = (await parseApiDocument({
+      openapi: '3.1.0',
+      info: { title: 'Content', version: '1.0.0' },
+      paths: {},
+      components: {
+        schemas: {
+          Upload: {
+            $id: 'https://example.com/schemas/upload.json',
+            $anchor: 'uploadAnchor',
+            type: 'string',
+            contentEncoding: 'base64',
+            contentMediaType: 'image/png',
+          },
+        },
+      },
+    })) as OpenApiDocument;
+
+    const upload = doc.schemas.find((s) => s.name === 'Upload');
+    expect(upload?.schemaId).toBe('https://example.com/schemas/upload.json');
+    expect(upload?.anchor).toBe('uploadAnchor');
+    expect(upload?.contentEncoding).toBe('base64');
+    expect(upload?.contentMediaType).toBe('image/png');
   });
 });
 

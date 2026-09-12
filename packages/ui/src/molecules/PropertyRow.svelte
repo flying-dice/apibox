@@ -92,10 +92,48 @@
     <p class="description" data-testid="{id}-description">{schema.description}</p>
   {/if}
 
-  {#if schema.constraints?.length || defaultValue !== undefined || schema.enum?.length || schema.examples?.length || schema.xml}
+  {#if schema.constraints?.length || defaultValue !== undefined || schema.enum?.length || schema.examples?.length || schema.xml || schema.contentEncoding || schema.contentMediaType || schema.schemaId || schema.anchor || schema.dynamicRef || schema.dynamicAnchor}
     <div class="meta">
       {#if schema.xml}
         <Chip label="xml" value={formatXml(schema.xml)} testId="{id}-xml" />
+      {/if}
+      {#if schema.schemaId}
+        <!--
+          A schema's own `$id`, not the document root's -- see SchemaNode.schemaId's doc
+          comment. Distinct from `refName`: this says "I am independently addressable",
+          not "I came from a named component".
+        -->
+        <Chip label="$id" value={schema.schemaId} code testId="{id}-schema-id" />
+      {/if}
+      {#if schema.anchor}
+        <Chip label="$anchor" value={schema.anchor} code testId="{id}-anchor" />
+      {/if}
+      {#if schema.dynamicRef}
+        <Chip label="$dynamicRef" value={schema.dynamicRef} code testId="{id}-dynamic-ref" />
+      {/if}
+      {#if schema.dynamicAnchor}
+        <Chip
+          label="$dynamicAnchor"
+          value={schema.dynamicAnchor}
+          code
+          testId="{id}-dynamic-anchor"
+        />
+      {/if}
+      {#if schema.contentEncoding}
+        <Chip
+          label="content encoding"
+          value={schema.contentEncoding}
+          code
+          testId="{id}-content-encoding"
+        />
+      {/if}
+      {#if schema.contentMediaType}
+        <Chip
+          label="content media type"
+          value={schema.contentMediaType}
+          code
+          testId="{id}-content-media-type"
+        />
       {/if}
       {#each schema.constraints ?? [] as constraint, index (index)}
         <Chip

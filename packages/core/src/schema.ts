@@ -2,6 +2,19 @@ import type { Composition, SchemaConstraint, SchemaNode, XmlInfo } from './types
 import { asRecord, asString } from './utils.js';
 
 /**
+ * `$comment` and `$vocabulary` are deliberately never read here.
+ *
+ * `$comment` is author-facing by spec design ("MUST NOT be used to convey information to
+ * consumers") -- surfacing it to a reader would show them a note the spec explicitly says
+ * is not for them. `$vocabulary` declares which keyword vocabularies a meta-schema requires
+ * or permits and whether each is optional; apibox is a renderer, not a validator, so it
+ * neither enforces nor needs to track vocabulary membership -- there is no reader-facing
+ * fact this would add beyond "this document mentions vocabularies", which is not useful
+ * without also implementing vocabulary-aware validation. Both are genuinely absent from the
+ * model, not a silent drop: this comment is that decision's record.
+ */
+
+/**
  * Keywords rendered as constraint chips rather than as structure, in the order they
  * should appear. `format` leads because it is the one readers scan for.
  */
@@ -137,6 +150,21 @@ function walk(
 
   const format = asString(schema.format);
   if (format) node.format = format;
+  // draft-04 spells the identifier `id`; 2019-09+ uses `$id`. Read at every node, not only
+  // the document root, so a bundle's per-`$defs` `$id` is not lost -- see the doc comment
+  // on `SchemaNode.schemaId`.
+  const schemaId = asString(schema.$id) ?? asString(schema.id);
+  if (schemaId) node.schemaId = schemaId;
+  const anchor = asString(schema.$anchor);
+  if (anchor) node.anchor = anchor;
+  const dynamicRef = asString(schema.$dynamicRef);
+  if (dynamicRef) node.dynamicRef = dynamicRef;
+  const dynamicAnchor = asString(schema.$dynamicAnchor);
+  if (dynamicAnchor) node.dynamicAnchor = dynamicAnchor;
+  const contentEncoding = asString(schema.contentEncoding);
+  if (contentEncoding) node.contentEncoding = contentEncoding;
+  const contentMediaType = asString(schema.contentMediaType);
+  if (contentMediaType) node.contentMediaType = contentMediaType;
   if (schema.deprecated === true) node.deprecated = true;
   if (schema.readOnly === true) node.readOnly = true;
   if (schema.writeOnly === true) node.writeOnly = true;
@@ -253,6 +281,13 @@ function walk(
 
   if (schema.contains !== undefined) {
     node.contains = walk(schema.contains, undefined, undefined, child);
+  }
+
+  // `contentSchema` describes the shape of the *decoded* content named by
+  // `contentMediaType` (e.g. a base64 field whose decoded bytes are themselves JSON) -- it
+  // nests like `propertyNames`/`contains` above rather than living in `constraints`.
+  if (schema.contentSchema !== undefined) {
+    node.contentSchema = walk(schema.contentSchema, undefined, undefined, child);
   }
 
   const dependentRequired = asRecord(schema.dependentRequired);

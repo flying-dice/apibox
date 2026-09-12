@@ -33,6 +33,15 @@ export async function parseJsonSchema(
   raw: unknown,
   options: ParseJsonSchemaOptions = {},
 ): Promise<JsonSchemaDocument> {
+  // A bare boolean (`true`/`false` as the entire document) is a legal whole JSON Schema
+  // per spec, and `normaliseSchema`/`walk()` already handles a boolean correctly at any
+  // *nested* position. It is not handled here, and deliberately not fixed: `detectFormat`
+  // (`../../detect.ts`) requires `asRecord(raw)` before it even looks at an explicit
+  // `format` hint, so no caller -- not even one passing `--format jsonschema` through
+  // `parseApiDocument`/`loadApiDocument` -- can reach this function with a boolean at all.
+  // This function is also not exported from the package's public surface. Loosening the
+  // check here would add an untested code path nothing can exercise; the actual gate to
+  // revisit, if this is ever prioritised, is `detectFormat`'s, not this one.
   const root = asRecord(raw);
   if (!root) throw new UnsupportedDocumentError('Document is not an object.');
 
@@ -67,6 +76,11 @@ export async function parseJsonSchema(
   // it. Composition, `$ref` markers and childless roots still force that row on their own
   // merits, so stripping only `description` here cannot make a document render empty.
   if (rootNode) delete rootNode.description;
+  // The root's own `$id` is promoted to `schemaId` below (same reasoning as `description`
+  // above: rendering it both on the document header and again on the root's own property
+  // row would show the same value twice). A nested `$defs`/`definitions` entry's `$id` is
+  // unaffected -- it is not the document root, so `walk()`'s own `schemaId` stays put there.
+  if (rootNode) delete rootNode.schemaId;
   const schemas = definitionEntries
     .map(([name, schema]) => normaliseSchema(schema, { names }, name))
     .filter((node): node is SchemaNode => Boolean(node));

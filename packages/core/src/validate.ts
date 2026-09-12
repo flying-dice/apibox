@@ -139,6 +139,12 @@ function isSchema(value: unknown): boolean {
         'circularRef',
         'unresolvedRef',
         'refName',
+        'schemaId',
+        'anchor',
+        'dynamicRef',
+        'dynamicAnchor',
+        'contentEncoding',
+        'contentMediaType',
       ]) ||
       !hasOptionalBooleans(candidate, [
         'required',
@@ -170,7 +176,7 @@ function isSchema(value: unknown): boolean {
         stack.push(...children);
       }
     }
-    for (const key of ['additionalProperties', 'items'] as const) {
+    for (const key of ['additionalProperties', 'items', 'contentSchema'] as const) {
       const child = candidate[key];
       if (child !== undefined) stack.push(child);
     }

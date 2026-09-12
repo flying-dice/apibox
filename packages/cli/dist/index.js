@@ -226,6 +226,24 @@ function walk(raw, name, required, frame) {
   const format = asString(schema.format);
   if (format)
     node.format = format;
+  const schemaId = asString(schema.$id) ?? asString(schema.id);
+  if (schemaId)
+    node.schemaId = schemaId;
+  const anchor = asString(schema.$anchor);
+  if (anchor)
+    node.anchor = anchor;
+  const dynamicRef = asString(schema.$dynamicRef);
+  if (dynamicRef)
+    node.dynamicRef = dynamicRef;
+  const dynamicAnchor = asString(schema.$dynamicAnchor);
+  if (dynamicAnchor)
+    node.dynamicAnchor = dynamicAnchor;
+  const contentEncoding = asString(schema.contentEncoding);
+  if (contentEncoding)
+    node.contentEncoding = contentEncoding;
+  const contentMediaType = asString(schema.contentMediaType);
+  if (contentMediaType)
+    node.contentMediaType = contentMediaType;
   if (schema.deprecated === true)
     node.deprecated = true;
   if (schema.readOnly === true)
@@ -316,6 +334,9 @@ function walk(raw, name, required, frame) {
   }
   if (schema.contains !== undefined) {
     node.contains = walk(schema.contains, undefined, undefined, child);
+  }
+  if (schema.contentSchema !== undefined) {
+    node.contentSchema = walk(schema.contentSchema, undefined, undefined, child);
   }
   const dependentRequired = asRecord(schema.dependentRequired);
   if (dependentRequired) {
@@ -1334,6 +1355,8 @@ async function parseJsonSchema(raw, options = {}) {
   const rootNode = hasRoot ? normaliseSchema(dereferenced, { names }) : undefined;
   if (rootNode)
     delete rootNode.description;
+  if (rootNode)
+    delete rootNode.schemaId;
   const schemas = definitionEntries.map(([name, schema]) => normaliseSchema(schema, { names }, name)).filter((node) => Boolean(node));
   const title = asString(dereferenced.title) ?? options.id ?? "Untitled schema";
   const schemaId = asString(dereferenced.$id) ?? asString(dereferenced.id);

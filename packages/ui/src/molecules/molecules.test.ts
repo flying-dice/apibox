@@ -285,6 +285,56 @@ describe('PropertyRow', () => {
     render(PropertyRow, { schema: { name: 'free', types: ['string'] } });
     expect(screen.queryByTestId('property-free-examples')).not.toBeInTheDocument();
   });
+
+  it('renders contentEncoding and contentMediaType as their own chips (card 40)', () => {
+    render(PropertyRow, {
+      schema: {
+        name: 'avatar',
+        types: ['string'],
+        contentEncoding: 'base64',
+        contentMediaType: 'image/png',
+      } satisfies SchemaNode,
+    });
+
+    expect(screen.getByTestId('property-avatar-content-encoding')).toHaveTextContent('base64');
+    expect(screen.getByTestId('property-avatar-content-media-type')).toHaveTextContent('image/png');
+  });
+
+  it('omits the content vocabulary chips when the schema declares neither', () => {
+    render(PropertyRow, { schema: { name: 'free', types: ['string'] } });
+    expect(screen.queryByTestId('property-free-content-encoding')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('property-free-content-media-type')).not.toBeInTheDocument();
+  });
+
+  it('renders a nested schema $id as its own chip, distinct from refName (card 40)', () => {
+    render(PropertyRow, {
+      schema: {
+        name: 'address',
+        types: ['object'],
+        schemaId: 'https://example.com/schemas/address.json',
+      } satisfies SchemaNode,
+    });
+
+    expect(screen.getByTestId('property-address-schema-id')).toHaveTextContent(
+      'https://example.com/schemas/address.json',
+    );
+  });
+
+  it('renders $anchor, $dynamicRef and $dynamicAnchor as their own chips (card 40)', () => {
+    render(PropertyRow, {
+      schema: {
+        name: 'extensible',
+        types: ['object'],
+        anchor: 'nodeAnchor',
+        dynamicRef: '#meta',
+        dynamicAnchor: 'meta',
+      } satisfies SchemaNode,
+    });
+
+    expect(screen.getByTestId('property-extensible-anchor')).toHaveTextContent('nodeAnchor');
+    expect(screen.getByTestId('property-extensible-dynamic-ref')).toHaveTextContent('#meta');
+    expect(screen.getByTestId('property-extensible-dynamic-anchor')).toHaveTextContent('meta');
+  });
 });
 
 describe('TabBar', () => {

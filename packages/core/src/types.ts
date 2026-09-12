@@ -30,6 +30,21 @@ export interface SchemaNode {
   types: string[];
   format?: string;
   description?: string;
+  /**
+   * The content vocabulary: \`contentEncoding\` and \`contentMediaType\`, annotating a string
+   * instance as encoded structured content (a base64-encoded PNG, an embedded JWT, ...). Kept
+   * as plain strings, same as \`format\`, since both are annotations a reader scans for
+   * rather than structure to expand.
+   */
+  contentEncoding?: string;
+  contentMediaType?: string;
+  /**
+   * \`contentSchema\`: the shape of the *decoded* content named by \`contentMediaType\`, e.g. a
+   * base64 field whose decoded bytes are themselves a JSON document. Nests like
+   * \`propertyNames\`/\`contains\` rather than living in \`constraints\`, because it is itself a
+   * schema with its own structure to expand, not a scalar annotation.
+   */
+  contentSchema?: SchemaNode;
   /** True when the parent listed this property in `required`. */
   required?: boolean;
   deprecated?: boolean;
@@ -82,6 +97,27 @@ export interface SchemaNode {
   unresolvedRef?: string;
   /** The component name this schema came from, when it was a named component. */
   refName?: string;
+  /**
+   * This schema's own \`$id\` (or draft-04 \`id\`), when it declares one *itself* rather than
+   * inheriting the document root's. A bundle that combines many schemas into one file
+   * commonly gives each \`$defs\` entry its own \`$id\` so it can be independently addressed --
+   * without this, a reader has no way to see that. The document root's own \`$id\` is still
+   * surfaced separately on \`JsonSchemaDocument.schemaId\`; this field is stripped from the
+   * root node to avoid showing the same value twice.
+   */
+  schemaId?: string;
+  /** \`$anchor\`: a plain fragment name this schema can be \`$ref\`'d by, within its document. */
+  anchor?: string;
+  /**
+   * \`$dynamicRef\`/\`$dynamicAnchor\`: the 2020-12 extensible-vocabulary mechanism, where the
+   * schema actually resolved at a \`$dynamicRef\` site depends on the outermost schema in the
+   * resolution scope that declares a matching \`$dynamicAnchor\`, not lexical nesting. apibox
+   * does not attempt that resolution -- it is genuinely dynamic, decided per evaluation, not
+   * a fixed target this renderer could point at -- so both are surfaced as the raw keyword
+   * value a reader needs to reason about the mechanism themselves.
+   */
+  dynamicRef?: string;
+  dynamicAnchor?: string;
   /**
    * `if`/`then`/`else`, preserved as the conditional triple the document actually wrote
    * rather than resolved to a single branch — the model has no way to know which branch a
