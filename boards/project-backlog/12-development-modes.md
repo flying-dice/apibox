@@ -24,6 +24,9 @@ the repository root so contributors do not need to know package-specific command
 
 - [x] tests-passing — typecheck and lint clean, 232 tests passed, all workspace builds passed (codex, 2026-09-10T18:45:26Z)
 - [x] clean-code-review — proportional review found no remaining marker above 0.5 (codex, 2026-09-10T18:45:26Z)
+- [x] tests-passing — typecheck 10x "0 ERRORS", biome clean over 148 files, core 211, ui 226, cli 7, extension 17, viewer 20, e2e 28 (claude, 2026-09-12T12:30:00.000Z)
+- [x] clean-code-review — marker scan reports zero findings above 0.5 (claude, 2026-09-12T12:30:00.000Z)
+- [ ] peer-reviewed — NOT SET. Requires a human; deliberately left for the user.
 
 ## Comments
 

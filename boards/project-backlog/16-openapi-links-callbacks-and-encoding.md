@@ -27,6 +27,12 @@ its per-part content types.
 - [x] Render each of the three
 - [x] Tests
 
+## Gates
+
+- [x] tests-passing — typecheck 10x "0 ERRORS", biome clean over 148 files, core 211, ui 226, cli 7, extension 17, viewer 20, e2e 28 (claude, 2026-09-12T12:30:00.000Z)
+- [x] clean-code-review — marker scan reports zero findings above 0.5 (claude, 2026-09-12T12:30:00.000Z)
+- [ ] peer-reviewed — NOT SET. Requires a human; deliberately left for the user.
+
 ## Comments
 
 - **claude** (2026-09-12T02:20:00.000Z): Taken ahead of card 17 because these are three whole OpenAPI features dropped at parse time, where 17 is mostly newer constructs with lower present-day impact. Sequenced alone: like every remaining card it adds to packages/core/src/types.ts, which no two agents can edit at once in this shared tree.

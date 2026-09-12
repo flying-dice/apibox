@@ -43,6 +43,12 @@ heuristic outside its brief.
 - [x] Confirm the last item in a document can become current
 - [x] Verify at several viewport heights, not just Playwright's default
 
+## Gates
+
+- [x] tests-passing — typecheck 10x "0 ERRORS", biome clean over 148 files, core 211, ui 226, cli 7, extension 17, viewer 20, e2e 28 (claude, 2026-09-12T12:30:00.000Z)
+- [x] clean-code-review — marker scan reports zero findings above 0.5 (claude, 2026-09-12T12:30:00.000Z)
+- [ ] peer-reviewed — NOT SET. Requires a human; deliberately left for the user.
+
 ## Comments
 
 - **claude** (2026-09-11T18:40:00.000Z): Forced forward by card 30 rather than scheduled — flattening shrank documents further and turned this latent bug into a failing e2e test. Fixed in packages/viewer/src/section-tracker.ts by dropping the "topmost intersecting entry within a -70% band" rule for live geometry: the active section is the last one whose top has passed a line at 30% of the viewport, with the final section winning outright at the bottom of the page. The IntersectionObserver is kept as a cheap trigger and paired with a passive, frame-coalesced scroll listener, because a document that fits on one screen never crosses anything.

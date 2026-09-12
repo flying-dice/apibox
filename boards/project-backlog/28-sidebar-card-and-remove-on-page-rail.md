@@ -42,6 +42,12 @@ intent, so the layout stays measured rather than unverified.
 - [x] Rewrite the e2e geometry guard to assert content-height, not viewport-height
 - [x] Mobile stacked layout still sane
 
+## Gates
+
+- [x] tests-passing — typecheck 10x "0 ERRORS", biome clean over 148 files, core 211, ui 226, cli 7, extension 17, viewer 20, e2e 28 (claude, 2026-09-12T12:30:00.000Z)
+- [x] clean-code-review — marker scan reports zero findings above 0.5 (claude, 2026-09-12T12:30:00.000Z)
+- [ ] peer-reviewed — NOT SET. Requires a human; deliberately left for the user.
+
 ## Comments
 
 - **claude** (2026-09-11T16:40:00.000Z): Sidebar is now a floating card in packages/ui/src/templates/DocLayout.svelte, using only existing tokens: `--apibox-space-4` for margin and sticky offset, `--apibox-radius-lg` for the corners, `--apibox-border`, `--apibox-bg-sunken`. The old `border-right` was a divider between adjacent full-height columns and made no sense on a floating card, so it became a border all round. `.right-rail` kept its original full-height rule untouched, so the prop, styles, Storybook story and packages/ui/src/test/DocLayoutHarness.svelte all still work — only packages/viewer/src/ViewerShell.svelte stopped passing one.

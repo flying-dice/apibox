@@ -24,6 +24,12 @@ none of it embedded from Redoc or Scalar. See decisions/01-own-renderers-not-emb
 - [x] `DocLayout` template (sidebar + content)
 - [x] Story rendering the whole Petstore document
 
+## Gates
+
+- [x] tests-passing — typecheck 10x "0 ERRORS", biome clean over 148 files, core 211, ui 226, cli 7, extension 17, viewer 20, e2e 28 (claude, 2026-09-12T12:30:00.000Z)
+- [x] clean-code-review — marker scan reports zero findings above 0.5 (claude, 2026-09-12T12:30:00.000Z)
+- [ ] peer-reviewed — NOT SET. Requires a human; deliberately left for the user.
+
 ## Comments
 
 - **codex** (2026-09-10T16:36:45.000Z): Claimed the deep OpenAPI renderer after cards 04 and 05 entered Review. Mapping the public model in packages/core/src/types.ts:1 to the completed UI primitives exported from packages/ui/src/index.ts:15 before implementing the organism and template layer.

@@ -41,6 +41,12 @@ them which pointer caused it.
 - [x] Warning parity with OpenAPI and OpenRPC, checked side by side
 - [x] Replace the test pinning today's throw-behaviour
 
+## Gates
+
+- [x] tests-passing — typecheck 10x "0 ERRORS", biome clean over 148 files, core 211, ui 226, cli 7, extension 17, viewer 20, e2e 28 (claude, 2026-09-12T12:30:00.000Z)
+- [x] clean-code-review — marker scan reports zero findings above 0.5 (claude, 2026-09-12T12:30:00.000Z)
+- [ ] peer-reviewed — NOT SET. Requires a human; deliberately left for the user.
+
 ## Comments
 
 - **claude** (2026-09-12T01:35:00.000Z): Taken ahead of bindings (card 19). Bindings add missing detail to documents that already render; this one decides whether a document renders at all. A reader with one stale reference currently gets a blank failure and no indication which pointer caused it, which is a worse experience than any amount of missing binding detail.

@@ -28,6 +28,12 @@ Note packages/core/src/source-name.ts:4 strips `.openapi`/`.asyncapi`/`.openrpc`
 - [x] Update docs/01-overview.md and the README — they name three formats
 - [x] Extension test and e2e suite green
 
+## Gates
+
+- [x] tests-passing — typecheck 10x "0 ERRORS", biome clean over 148 files, core 211, ui 226, cli 7, extension 17, viewer 20, e2e 28 (claude, 2026-09-12T12:30:00.000Z)
+- [x] clean-code-review — marker scan reports zero findings above 0.5 (claude, 2026-09-12T12:30:00.000Z)
+- [ ] peer-reviewed — NOT SET. Requires a human; deliberately left for the user.
+
 ## Comments
 
 - **claude** (2026-09-11T14:20:00.000Z): Scope is smaller than the checklist implied. Verified by building a real site that the CLI pipeline is already format-agnostic and needs no change to render JSON Schema. Confirmed the `.schema` suffix bug is real: the build emitted the document id `user-profile-schema`, because packages/core/src/source-name.ts:4 strips `.openapi`/`.asyncapi`/`.openrpc`/`.api`/`.spec` but not `.schema`.

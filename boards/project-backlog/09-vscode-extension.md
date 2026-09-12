@@ -25,6 +25,12 @@ classic late derailment.
 - [x] `APIBox: Deploy Static Site to GitHub Pages`
 - [x] esbuild bundling + webview asset copy + `vsce package`
 
+## Gates
+
+- [x] tests-passing — typecheck 10x "0 ERRORS", biome clean over 148 files, core 211, ui 226, cli 7, extension 17, viewer 20, e2e 28 (claude, 2026-09-12T12:30:00.000Z)
+- [x] clean-code-review — marker scan reports zero findings above 0.5 (claude, 2026-09-12T12:30:00.000Z)
+- [ ] peer-reviewed — NOT SET. Requires a human; deliberately left for the user.
+
 ## Comments
 
 - **codex** (2026-09-10T18:02:04.000Z): Claimed after the static-site generator entered Review. Starting with the custom editor and the already-defined correlated webview protocol, then layering the build and deploy commands over the tested CLI API.

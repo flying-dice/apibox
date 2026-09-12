@@ -42,6 +42,12 @@ poor reason when the stated goal is coverage.
 - [x] OpenRPC component catalogues, or a recorded reason they genuinely do not belong
 - [x] Separate `summary` from `description` where the spec distinguishes them
 
+## Gates
+
+- [x] tests-passing — typecheck 10x "0 ERRORS", biome clean over 148 files, core 211, ui 226, cli 7, extension 17, viewer 20, e2e 28 (claude, 2026-09-12T12:30:00.000Z)
+- [x] clean-code-review — marker scan reports zero findings above 0.5 (claude, 2026-09-12T12:30:00.000Z)
+- [ ] peer-reviewed — NOT SET. Requires a human; deliberately left for the user.
+
 ## Comments
 
 - **claude** (2026-09-12T11:00:00.000Z): My defence of these omissions was wrong twice over. `.json()` is confirmed public API on `BaseModel`, so channel tags were always reachable through supported means — and card 41 had in fact already implemented them, via an untyped cast, without flagging that it had gone against the recorded reasoning. This card rewrote that read to use the public accessor, guarded with the existing `asRecord`/`asArray`/`asString` helpers. So the honest history is: the feature was not missing, it was reached the wrong way, and my note claiming it was unreachable was never true.

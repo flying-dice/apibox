@@ -41,6 +41,12 @@ development dirtying the working tree.
 - [x] Regression tests for the flag
 - [x] Documented in docs/01-overview.md and the decision record
 
+## Gates
+
+- [x] tests-passing — typecheck 10x "0 ERRORS", biome clean over 148 files, core 211, ui 226, cli 7, extension 17, viewer 20, e2e 28 (claude, 2026-09-12T12:30:00.000Z)
+- [x] clean-code-review — marker scan reports zero findings above 0.5 (claude, 2026-09-12T12:30:00.000Z)
+- [ ] peer-reviewed — NOT SET. Requires a human; deliberately left for the user.
+
 ## Comments
 
 - **claude** (2026-09-11T19:20:00.000Z): Fixed in packages/cli/src/dev.ts, with a new `--asset-dir` flag in packages/cli/src/cli.ts mapping to the `assetDir` option `buildSite` already accepted. Chose to rebuild unconditionally after measuring the viewer web build at 200ms — a full dev build now runs end to end in 0.46s, so staleness detection would have been complexity bought for nothing. `--help` and `init` skip the rebuild entirely.

@@ -31,6 +31,12 @@ decision rather than attempting all of them.
 - [x] Render bindings per location
 - [x] Tests
 
+## Gates
+
+- [x] tests-passing — typecheck 10x "0 ERRORS", biome clean over 148 files, core 211, ui 226, cli 7, extension 17, viewer 20, e2e 28 (claude, 2026-09-12T12:30:00.000Z)
+- [x] clean-code-review — marker scan reports zero findings above 0.5 (claude, 2026-09-12T12:30:00.000Z)
+- [ ] peer-reviewed — NOT SET. Requires a human; deliberately left for the user.
+
 ## Comments
 
 - **claude** (2026-09-12T03:30:00.000Z): The user chose full protocol coverage rather than a staged subset, so the sign-off this card demanded is given and the question is now how to reach every protocol without hand-modelling roughly forty interfaces. A generic representation keyed by protocol reaches all of them by construction and cannot go stale as AsyncAPI adds more; typed per-protocol interfaces would cover a fixed handful properly and silently drop the rest. That tradeoff is the real decision in this card.

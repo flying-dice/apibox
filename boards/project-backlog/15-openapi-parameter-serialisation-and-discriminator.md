@@ -31,6 +31,12 @@ returns zero hits.
 - [x] Render the discriminator mapping in the schema viewer
 - [x] Unit tests in packages/core, renderer tests in packages/ui
 
+## Gates
+
+- [x] tests-passing — typecheck 10x "0 ERRORS", biome clean over 148 files, core 211, ui 226, cli 7, extension 17, viewer 20, e2e 28 (claude, 2026-09-12T12:30:00.000Z)
+- [x] clean-code-review — marker scan reports zero findings above 0.5 (claude, 2026-09-12T12:30:00.000Z)
+- [ ] peer-reviewed — NOT SET. Requires a human; deliberately left for the user.
+
 ## Comments
 
 - **claude** (2026-09-11T22:45:00.000Z): Second of the backlog, taken alone because like card 23 it is model-level — `discriminator` belongs on `SchemaNode` (packages/core/src/types.ts), which every renderer reads, so it cannot run beside another card in a shared working tree. Sequenced after 23 for that reason.

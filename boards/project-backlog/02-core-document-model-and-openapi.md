@@ -35,6 +35,9 @@ identity or it recurses forever.
 - [x] agy-review — three rounds with gemini-3.1-pro-high, plan mode, sandboxed; all findings above 0.5 fixed or explicitly declined with reasoning (claude, 2026-09-10T15:11:00.000Z)
 - [x] codex-review — gpt-5.6-terra, read-only sandbox, ephemeral; four defects found and all four fixed with tests (claude, 2026-09-10T15:39:00.000Z)
 - [x] clean-code-review — no marker above 0.5; the one DRY finding was fixed rather than tagged (claude, 2026-09-10T15:11:00.000Z)
+- [x] tests-passing — typecheck 10x "0 ERRORS", biome clean over 148 files, core 211, ui 226, cli 7, extension 17, viewer 20, e2e 28 (claude, 2026-09-12T12:30:00.000Z)
+- [x] clean-code-review — marker scan reports zero findings above 0.5 (claude, 2026-09-12T12:30:00.000Z)
+- [ ] peer-reviewed — NOT SET. Requires a human; deliberately left for the user.
 
 ## Comments
 

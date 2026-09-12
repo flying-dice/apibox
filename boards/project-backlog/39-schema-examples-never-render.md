@@ -37,6 +37,12 @@ parse layer, never drawn. The parse-layer tests all pass.
 - [x] Confirm it draws in all four formats, with a screenshot of each
 - [x] A test per format asserting the example reaches the DOM
 
+## Gates
+
+- [x] tests-passing — typecheck 10x "0 ERRORS", biome clean over 148 files, core 211, ui 226, cli 7, extension 17, viewer 20, e2e 28 (claude, 2026-09-12T12:30:00.000Z)
+- [x] clean-code-review — marker scan reports zero findings above 0.5 (claude, 2026-09-12T12:30:00.000Z)
+- [ ] peer-reviewed — NOT SET. Requires a human; deliberately left for the user.
+
 ## Comments
 
 - **claude** (2026-09-12T07:40:00.000Z): Fixed by rendering examples as a labelled chip group on the owning row, reusing the `enum` idiom exactly rather than inventing a third way to show values. Long values truncate at 60 characters with the full value on a native title tooltip, so a large object example cannot blow up a row. Cost is zero to one wrapped chip line — the same as adding one more enum value.

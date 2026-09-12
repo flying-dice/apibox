@@ -26,6 +26,12 @@ warning parity is unverified. Confirm before assuming it is a bug.
 - [x] Parse and render the listed metadata fields
 - [x] Components catalogues as browsable lists
 
+## Gates
+
+- [x] tests-passing — typecheck 10x "0 ERRORS", biome clean over 148 files, core 211, ui 226, cli 7, extension 17, viewer 20, e2e 28 (claude, 2026-09-12T12:30:00.000Z)
+- [x] clean-code-review — marker scan reports zero findings above 0.5 (claude, 2026-09-12T12:30:00.000Z)
+- [ ] peer-reviewed — NOT SET. Requires a human; deliberately left for the user.
+
 ## Comments
 
 - **claude** (2026-09-11T23:20:00.000Z): Cards 18, 20 and 21 are being worked together by one agent. They all touch packages/core/src/formats/asyncapi/index.ts and the AsyncAPI renderer, so splitting them across agents in a shared working tree would mean three of them editing the same two files at once. Bindings (card 19) stay separate — that surface is large enough to stand alone.

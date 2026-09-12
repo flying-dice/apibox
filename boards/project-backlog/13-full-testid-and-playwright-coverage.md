@@ -28,6 +28,9 @@ viewer workflow in a real browser for OpenAPI, AsyncAPI and JSON-RPC.
 
 - [x] tests-passing — exact board gate passed: clean typecheck/lint, 235 unit tests and 15 Playwright tests; Playwright rebuilt all packages and the CLI-generated three-format site (codex, 2026-09-10T19:13:53Z)
 - [x] clean-code-review — full parallel review resolved six findings; re-review found no introduced marker above 0.5 (codex, 2026-09-10T19:13:53Z)
+- [x] tests-passing — typecheck 10x "0 ERRORS", biome clean over 148 files, core 211, ui 226, cli 7, extension 17, viewer 20, e2e 28 (claude, 2026-09-12T12:30:00.000Z)
+- [x] clean-code-review — marker scan reports zero findings above 0.5 (claude, 2026-09-12T12:30:00.000Z)
+- [ ] peer-reviewed — NOT SET. Requires a human; deliberately left for the user.
 
 ## Comments
 

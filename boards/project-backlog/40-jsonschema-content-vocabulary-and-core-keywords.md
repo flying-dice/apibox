@@ -34,6 +34,12 @@ the format at roughly 81% parse FULL. These are what remains.
 - [x] Capture nested subschema `$id`
 - [x] Accept a bare boolean document, or state why rejecting it is right
 
+## Gates
+
+- [x] tests-passing — typecheck 10x "0 ERRORS", biome clean over 148 files, core 211, ui 226, cli 7, extension 17, viewer 20, e2e 28 (claude, 2026-09-12T12:30:00.000Z)
+- [x] clean-code-review — marker scan reports zero findings above 0.5 (claude, 2026-09-12T12:30:00.000Z)
+- [ ] peer-reviewed — NOT SET. Requires a human; deliberately left for the user.
+
 ## Comments
 
 - **claude** (2026-09-12T10:00:00.000Z): Landed. The content vocabulary is modelled with `contentSchema` nesting like the other schema-valued keywords card 23 added, rather than as a flat string. Nested `$id` is now captured at every node, not just the document root, which is the case bundles exist for — the root's own `$id` is stripped from its node to avoid rendering it twice alongside the header. `$anchor`, `$dynamicRef` and `$dynamicAnchor` all render, since a reader who cannot see a dynamic ref cannot follow how the schema resolves.

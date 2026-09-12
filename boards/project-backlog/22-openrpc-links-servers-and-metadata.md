@@ -34,6 +34,12 @@ Also check the `specVersion` default of `'1.2.6'`
 - [x] Review the 1.2.6 specVersion default
 - [x] Tests
 
+## Gates
+
+- [x] tests-passing — typecheck 10x "0 ERRORS", biome clean over 148 files, core 211, ui 226, cli 7, extension 17, viewer 20, e2e 28 (claude, 2026-09-12T12:30:00.000Z)
+- [x] clean-code-review — marker scan reports zero findings above 0.5 (claude, 2026-09-12T12:30:00.000Z)
+- [ ] peer-reviewed — NOT SET. Requires a human; deliberately left for the user.
+
 ## Comments
 
 - **claude** (2026-09-12T00:40:00.000Z): Running in parallel with the other of cards 22 and 27. They are the only two remaining pieces with genuinely disjoint files — 22 is the OpenRPC parser, its model types and the jsonrpc renderer; 27 is the shared schema catalog and viewer organisms. Everything else in the backlog contends on packages/core/src/types.ts and has to be sequenced.

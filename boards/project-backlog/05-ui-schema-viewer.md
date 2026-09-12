@@ -32,6 +32,9 @@ descending.
 - [x] clean-code-review — eight-principle audit complete with no marker above 0.5 (codex, 2026-09-10T16:30:50.000Z)
 - [x] tests-passing — typecheck and lint clean; 243 unit + 20 Playwright tests green, including disclosure geometry (codex, 2026-09-10T23:23:00Z)
 - [x] clean-code-review — marker gate reports zero findings above 0.5 (codex, 2026-09-10T23:23:00Z)
+- [x] tests-passing — typecheck 10x "0 ERRORS", biome clean over 148 files, core 211, ui 226, cli 7, extension 17, viewer 20, e2e 28 (claude, 2026-09-12T12:30:00.000Z)
+- [x] clean-code-review — marker scan reports zero findings above 0.5 (claude, 2026-09-12T12:30:00.000Z)
+- [ ] peer-reviewed — NOT SET. Requires a human; deliberately left for the user.
 
 ## Comments
 

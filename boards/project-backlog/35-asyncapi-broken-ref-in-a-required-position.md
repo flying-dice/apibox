@@ -37,3 +37,9 @@ general claim.
 - [x] Confirm the reader is still told which pointer broke
 - [x] Keep card 34's schema-position behaviour unchanged
 - **claude** (2026-09-12T05:10:00.000Z): Fixed with drop-and-warn rather than a shape-aware stub. A stub would need per-position knowledge of what each AsyncAPI object requires — Server, Channel, SecurityScheme and so on — which is exactly the ageing risk this card named. Instead the parser reads the validation diagnostics, matches a severity-0 diagnostic's path against the known unresolved-ref positions, drops that entry and retries once. General across every position, encoding no spec-shape knowledge. It engages only when the plain marker genuinely fails validation, so card 34's schema-position behaviour never reaches this branch — pinned by a regression test.
+
+## Gates
+
+- [x] tests-passing — typecheck 10x "0 ERRORS", biome clean over 148 files, core 211, ui 226, cli 7, extension 17, viewer 20, e2e 28 (claude, 2026-09-12T12:30:00.000Z)
+- [x] clean-code-review — marker scan reports zero findings above 0.5 (claude, 2026-09-12T12:30:00.000Z)
+- [ ] peer-reviewed — NOT SET. Requires a human; deliberately left for the user.

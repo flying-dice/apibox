@@ -22,6 +22,12 @@ keeps `bunx` at roughly a second. See decisions/03-cli-ships-a-prebuilt-shell.md
 - [x] `bin/apibox.mjs` at the repo root
 - [x] Tests: build the examples, assert the output tree
 
+## Gates
+
+- [x] tests-passing — typecheck 10x "0 ERRORS", biome clean over 148 files, core 211, ui 226, cli 7, extension 17, viewer 20, e2e 28 (claude, 2026-09-12T12:30:00.000Z)
+- [x] clean-code-review — marker scan reports zero findings above 0.5 (claude, 2026-09-12T12:30:00.000Z)
+- [ ] peer-reviewed — NOT SET. Requires a human; deliberately left for the user.
+
 ## Comments
 
 - **codex** (2026-09-10T17:50:06.000Z): Claimed after the viewer shell entered Review. Starting from the existing CLI and packaging decisions, then implementing the build pipeline around the prebuilt viewer rather than invoking Vite on the user's machine.

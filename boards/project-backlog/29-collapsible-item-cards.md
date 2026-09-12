@@ -45,6 +45,12 @@ box of its own.
 - [x] Scroll-spy still highlights the right nav entry with everything collapsed
 - [x] Existing tests updated to expand before asserting inner content
 
+## Gates
+
+- [x] tests-passing — typecheck 10x "0 ERRORS", biome clean over 148 files, core 211, ui 226, cli 7, extension 17, viewer 20, e2e 28 (claude, 2026-09-12T12:30:00.000Z)
+- [x] clean-code-review — marker scan reports zero findings above 0.5 (claude, 2026-09-12T12:30:00.000Z)
+- [ ] peer-reviewed — NOT SET. Requires a human; deliberately left for the user.
+
 ## Comments
 
 - **claude** (2026-09-11T17:40:00.000Z): Landed as packages/ui/src/molecules/CollapsibleCard.svelte, applied to the four navigable item types. Collapsed content stays in the DOM behind `hidden="until-found"` with a `beforematch` handler rather than being removed by an `{#if}` — removing it would not have failed the testid guard in tests/e2e/coverage.ts, it would have silently shrunk what that guard checks, and it would have put the content beyond browser find-in-page.

@@ -39,6 +39,12 @@ The rest are small:
 - [x] Document/Info/Operation/Tag/Server `x-*` extensions captured and rendered
 - [x] Closed schemas visibly distinguished from unspecified ones
 
+## Gates
+
+- [x] tests-passing — typecheck 10x "0 ERRORS", biome clean over 148 files, core 211, ui 226, cli 7, extension 17, viewer 20, e2e 28 (claude, 2026-09-12T12:30:00.000Z)
+- [x] clean-code-review — marker scan reports zero findings above 0.5 (claude, 2026-09-12T12:30:00.000Z)
+- [ ] peer-reviewed — NOT SET. Requires a human; deliberately left for the user.
+
 ## Comments
 
 - **claude** (2026-09-12T07:00:00.000Z): All five landed and all five render — nothing left modelled-only. `webhooks` reuses `parsePathItemOperations` rather than a second path-item walker, shares the operation id set with `paths` so ids stay unique across both, and gets its own flat nav group.

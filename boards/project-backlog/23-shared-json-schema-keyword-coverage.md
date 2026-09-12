@@ -37,6 +37,12 @@ by reading the function — it skips `false` and stringifies `true`.
 - [x] Capture and render `x-*` extensions across all formats
 - [x] Confirm no regression in existing OpenAPI/AsyncAPI/OpenRPC expectations
 
+## Gates
+
+- [x] tests-passing — typecheck 10x "0 ERRORS", biome clean over 148 files, core 211, ui 226, cli 7, extension 17, viewer 20, e2e 28 (claude, 2026-09-12T12:30:00.000Z)
+- [x] clean-code-review — marker scan reports zero findings above 0.5 (claude, 2026-09-12T12:30:00.000Z)
+- [ ] peer-reviewed — NOT SET. Requires a human; deliberately left for the user.
+
 ## Comments
 
 - **claude** (2026-09-11T22:00:00.000Z): Taken first of the backlog because it is the foundation the other nine sit on. It changes `SchemaNode` (packages/core/src/types.ts:24-85), which every renderer reads, so running it alongside any other card would mean two agents editing the same interface in one shared working tree. Everything else in the backlog waits on this landing.

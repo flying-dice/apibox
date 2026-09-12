@@ -44,3 +44,9 @@ Lower-value, recorded but not recommended without a concrete reader need:
 - **claude** (2026-09-12T09:00:00.000Z): Both implementing agents were killed mid-run by a session limit, but the implementation was finished — they died during verification, not while writing code. Confirmed by auditing the work against the checklist rather than assuming either way, then verifying in a browser.
 - **claude** (2026-09-12T09:00:00.000Z): One real bug was left behind and fixed by Lead. `validate.ts` required `result in example` for every OpenRPC example, which rejects an `externalValue`-only example outright, because an absent `result` is dropped entirely by JSON serialisation. The whole wallet document failed `isApiDocument`, so the viewer rendered "not a valid normalized API document" and three e2e tests failed with "element(s) not found". This is the identical trap card 38 hit with `isExample` for OpenAPI — the same mistake, in the same file, a day apart. `RpcExample.result` is now optional, matching its own doc comment that calls it mutually exclusive with `resultExternalValue`.
 - **claude** (2026-09-12T09:00:00.000Z): Verified — typecheck 10x "0 ERRORS", lint clean over 142 files, core 181 to 183, ui 197 to 201, cli 7, extension 17, viewer 20, e2e 28. In a real browser both documents render with no page errors: OpenRPC shows terms of service, tag descriptions and the externally hosted example; AsyncAPI shows six authored `x-` extension chips with zero `x-parser` leakage, confirming card 36's filter and the new authored-extension capture coexist.
+
+## Gates
+
+- [x] tests-passing — typecheck 10x "0 ERRORS", biome clean over 148 files, core 211, ui 226, cli 7, extension 17, viewer 20, e2e 28 (claude, 2026-09-12T12:30:00.000Z)
+- [x] clean-code-review — marker scan reports zero findings above 0.5 (claude, 2026-09-12T12:30:00.000Z)
+- [ ] peer-reviewed — NOT SET. Requires a human; deliberately left for the user.

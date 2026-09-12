@@ -37,6 +37,12 @@ than a container, mirroring SchemaViewer's existing showRoot logic) / Definition
 - [x] renderers.test.ts coverage
 - [ ] e2e over a new examples/*.schema.json
 
+## Gates
+
+- [x] tests-passing — typecheck 10x "0 ERRORS", biome clean over 148 files, core 211, ui 226, cli 7, extension 17, viewer 20, e2e 28 (claude, 2026-09-12T12:30:00.000Z)
+- [x] clean-code-review — marker scan reports zero findings above 0.5 (claude, 2026-09-12T12:30:00.000Z)
+- [ ] peer-reviewed — NOT SET. Requires a human; deliberately left for the user.
+
 ## Comments
 
 - **claude** (2026-09-11T13:40:00.000Z): Started, with three UX fixes folded in rather than left to a follow-up. (1) packages/ui/src/organisms/DocumentHeader.svelte:18 renders `document.kind` raw and would print "jsonschema"; adding a display-label map for all four kinds. (2) The dialect would print twice — once at DocumentHeader.svelte:19 as `specVersion`, once at :28 as the Version row — since `version` and `specVersion` are the same dialect string by design; adding an optional `versionLabel` prop so JSON Schema shows it once as "Dialect". (3) packages/ui/src/organisms/SchemaCatalog.svelte:22 hardcodes "Schemas", which is tautological for a schema-only document; adding an optional `title` prop and relabelling the nav node in buildNav (packages/core/src/formats/jsonschema/index.ts:131) to "Definitions" so the sidebar and heading agree. Nav node id stays `schemas` so anchors and the section tracker keep working.

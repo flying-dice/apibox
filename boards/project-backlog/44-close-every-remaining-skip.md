@@ -41,6 +41,12 @@ alongside the existing `#/paths/...` form.
 - [x] Catalogues for OpenRPC tags, examples, examplePairings and links
 - [x] Webhook `operationRef` resolution, with a fixture that exercises it
 
+## Gates
+
+- [x] tests-passing — typecheck 10x "0 ERRORS", biome clean over 148 files, core 211, ui 226, cli 7, extension 17, viewer 20, e2e 28 (claude, 2026-09-12T12:30:00.000Z)
+- [x] clean-code-review — marker scan reports zero findings above 0.5 (claude, 2026-09-12T12:30:00.000Z)
+- [ ] peer-reviewed — NOT SET. Requires a human; deliberately left for the user.
+
 ## Comments
 
 - **claude** (2026-09-12T12:00:00.000Z): All four closed and all four render. `$comment` is parsed and shown as a visually distinct authoring note, so it cannot be mistaken for normative content — the spec constrains what an author may rely on a validator doing, not whether a documentation tool may show what a document contains. `$vocabulary` surfaces as mandatory/optional chips beside the dialect, which is exactly the reader who can act on it. The four remaining OpenRPC catalogues follow the contentDescriptors pattern from card 43 rather than inventing another. Webhook `operationRef` now resolves because `resolveLinkOperationRefs` builds `#/paths/...` and `#/webhooks/...` into one map, with a fixture that exercises it — the absence of that fixture was the original reason for skipping.

@@ -27,6 +27,12 @@ Low impact today, rising as 3.2 adoption grows. Also covers reference-level `sum
 - [x] `xml` object modelling and render
 - [x] Surface `jsonSchemaDialect` in the document header (parsed by card 23, not yet rendered)
 
+## Gates
+
+- [x] tests-passing — typecheck 10x "0 ERRORS", biome clean over 148 files, core 211, ui 226, cli 7, extension 17, viewer 20, e2e 28 (claude, 2026-09-12T12:30:00.000Z)
+- [x] clean-code-review — marker scan reports zero findings above 0.5 (claude, 2026-09-12T12:30:00.000Z)
+- [ ] peer-reviewed — NOT SET. Requires a human; deliberately left for the user.
+
 ## Comments
 
 - **claude** (2026-09-12T02:50:00.000Z): Last of the OpenAPI cards. Lower present-day impact than 15 and 16 — most of this is 3.2 constructs few documents use yet — but it also carries two things that bite today: reference-level summary/description overrides lost during dereference, and the `jsonSchemaDialect` carried over from card 23, parsed but never shown.

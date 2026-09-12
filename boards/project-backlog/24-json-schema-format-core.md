@@ -39,6 +39,12 @@ anything downstream.
 - [x] Warn on unrecognised `$schema` rather than guessing
 - [x] Repo-wide typecheck green (this is where the FormatId blast radius surfaces)
 
+## Gates
+
+- [x] tests-passing — typecheck 10x "0 ERRORS", biome clean over 148 files, core 211, ui 226, cli 7, extension 17, viewer 20, e2e 28 (claude, 2026-09-12T12:30:00.000Z)
+- [x] clean-code-review — marker scan reports zero findings above 0.5 (claude, 2026-09-12T12:30:00.000Z)
+- [ ] peer-reviewed — NOT SET. Requires a human; deliberately left for the user.
+
 ## Comments
 
 - **claude** (2026-09-11T13:00:00.000Z): Started. Detection is explicit-signal only per decisions/08-json-schema-as-fourth-format.md — recognised `$schema` dialect URI or explicit `ParseOptions.format`, no filename or shape heuristics. `version` stays required (packages/core/src/types.ts:165) and is populated from the dialect, so `ApiDocumentBase` and the manifest format are untouched. Widening `FormatId` (packages/core/src/types.ts:10) is expected to break typecheck in ui/viewer/cli/extension; that is card 25/26 work and is being reported, not fixed, here.

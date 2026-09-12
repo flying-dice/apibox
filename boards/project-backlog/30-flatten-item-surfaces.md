@@ -39,6 +39,12 @@ stronger row separation, not the return of the card.
 - [x] Group gaps in the four renderers collapse so rows sit flush
 - [x] Hover and focus-visible affordances survive without a surface
 
+## Gates
+
+- [x] tests-passing — typecheck 10x "0 ERRORS", biome clean over 148 files, core 211, ui 226, cli 7, extension 17, viewer 20, e2e 28 (claude, 2026-09-12T12:30:00.000Z)
+- [x] clean-code-review — marker scan reports zero findings above 0.5 (claude, 2026-09-12T12:30:00.000Z)
+- [ ] peer-reviewed — NOT SET. Requires a human; deliberately left for the user.
+
 ## Comments
 
 - **claude** (2026-09-11T18:40:00.000Z): Implemented by Lead directly. The delegated agent was blocked by the repo's background-isolation write guard, and its suggested remedies did not fit: a worktree branches from committed HEAD, which contains neither card 29's untracked CollapsibleCard.svelte nor the user's dirty in-flight work, and disabling the guard in .claude/settings.json is not a change to make unasked.
