@@ -15,6 +15,13 @@ lines), the relevant `packages/core/src/types.ts` interfaces, the UI renderers u
 `packages/ui/src/renderers/jsonrpc/`, and by running the existing test suite
 (`bun test packages/core/src/parse.test.ts` → 114 pass, 0 fail).
 
+> **Superseded 2026-09-12.** Cards 38 to 44 closed every gap this report lists, including
+> the rows scored NONE below. Constructs previously recorded as deliberate omissions —
+> `$comment`, `$vocabulary`, the OpenRPC component catalogues, AsyncAPI channel tags and
+> external docs, and webhook `operationRef` resolution — were re-examined, found to be
+> editorial judgements rather than technical limits, and implemented. Treat the matrix below
+> as the state at audit time, not as current. Re-audit before citing any figure from it.
+
 ## Headline
 
 Almost every construct that was NONE in the previous assessment is now FULL at the parse

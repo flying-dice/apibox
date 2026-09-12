@@ -7,6 +7,13 @@ Assessed 2026-09-12 against JSON Schema 2020-12 (draft 2020-12), with the older 
 dialects — 2019-09, draft-07, draft-06, draft-04 — assessed for the keyword-shape differences
 apibox is documented as tolerating (`decisions/08-json-schema-as-fourth-format.md`).
 
+> **Superseded 2026-09-12.** Cards 38 to 44 closed every gap this report lists, including
+> the rows scored NONE below. Constructs previously recorded as deliberate omissions —
+> `$comment`, `$vocabulary`, the OpenRPC component catalogues, AsyncAPI channel tags and
+> external docs, and webhook `operationRef` resolution — were re-examined, found to be
+> editorial judgements rather than technical limits, and implemented. Treat the matrix below
+> as the state at audit time, not as current. Re-audit before citing any figure from it.
+
 ## Headline
 
 apibox's fourth format is a thin, honest parser: it dereferences `$ref`, walks the result

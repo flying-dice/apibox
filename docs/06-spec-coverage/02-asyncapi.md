@@ -9,6 +9,13 @@ Re-assessed 2026-09-12 against AsyncAPI 3.0.0 (and the 2.6.0 compatibility path 
 36. This supersedes the 2026-09-11 assessment, which scored parse at ~35% and bindings at 0% —
 both figures are now stale; see "Reconciling the two prior estimates" below for why.
 
+> **Superseded 2026-09-12.** Cards 38 to 44 closed every gap this report lists, including
+> the rows scored NONE below. Constructs previously recorded as deliberate omissions —
+> `$comment`, `$vocabulary`, the OpenRPC component catalogues, AsyncAPI channel tags and
+> external docs, and webhook `operationRef` resolution — were re-examined, found to be
+> editorial judgements rather than technical limits, and implemented. Treat the matrix below
+> as the state at audit time, not as current. Re-audit before citing any figure from it.
+
 ## Headline
 
 Since the last assessment, apibox's AsyncAPI support gained: `components.securitySchemes` plus

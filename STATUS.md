@@ -1,121 +1,64 @@
 # apibox — status
 
-**Updated:** 2026-09-11 00:27 UTC · **Branch:** `main` · **Working tree:** native VS Code theme parity verified
+**Updated:** 2026-09-12 12:40 UTC · **Branch:** `main` · **Working tree:** clean, all work pushed
 
 ## Goal / health
 
 Bootstrap a Bun workspace delivering API documentation three ways from one rendering
-engine: a VS Code extension, a static site generator, and a GitHub Pages deploy — covering
-OpenAPI, AsyncAPI and JSON-RPC. See `docs/01-overview.md`.
+engine: a VS Code extension, a static site generator, and a GitHub Pages deploy — now
+covering **four** formats: OpenAPI, AsyncAPI, JSON-RPC/OpenRPC and standalone JSON Schema.
+See `docs/01-overview.md` and `decisions/08-json-schema-as-fourth-format.md`.
 
-**Health: all 14 cards are in Review.** `@apibox/core` parses all three formats.
-The UI foundations, OpenAPI renderer, shared browser/VS Code viewer shell, static-site CLI
-and extension are implementation-complete. The exact review gate passes clean typecheck,
-lint, 251 unit tests and 22 Playwright tests (273 total), with the browser suite rebuilding
-every workspace and exercising the CLI-generated static site. The VSIX also packages
-cleanly. Every runnable workspace surface has a documented development mode. The
-Antigravity review gate was removed at the user's direction.
+**Health: 44 cards, all implemented, all in Review.** Both script gates pass on every card —
+typecheck 10x "0 ERRORS", biome clean over 148 files, and core 211 / ui 226 / cli 7 /
+extension 17 / viewer 20 / e2e 28, up from 268 tests at the start of this work.
+
+**Not done.** Every card sits in Review because the board's Done gate is `peer-reviewed:
+true`, labelled "Signed off by a human". No human has signed off, so the field is unset on
+all 44. That is deliberate: setting it agent-side would make the field mean "the agent
+finished this" rather than "a human checked this", on every card from then on.
+
+## Coverage
+
+Four spec-coverage assessments live in `docs/06-spec-coverage/`. All three pre-existing
+reports are marked superseded: cards 38-44 closed every gap they list, including constructs
+earlier recorded as deliberate omissions. Every construct the audits enumerated is now both
+parsed and rendered. The reports' matrices are historical; re-audit before citing a figure.
+
+Deliberate non-implementations remaining: none.
+
+## Known unverified
+
+Card 33's VS Code activity-bar rail has never been seen in a running window — the tree
+logic, contributions and build are tested, but no GUI verification has happened. Run
+`bun run dev:extension` with a full window restart.
 
 ## Now
 
-Card [03](boards/project-backlog/03-ui-tokens-and-storybook.md) is back in **Review** with
-the native VS Code roles and high-contrast behavior from Open Domain Specification brought
-into APIBox's shared semantic adapter. The extension bundle contains the native mappings and
-excludes standalone theme selectors.
+Nothing is in progress. The last card closed was 44, which implemented the final four
+constructs previously recorded as deliberate skips.
 
-Card [07](boards/project-backlog/07-viewer-spa-shell.md) is back in **Review**. Desktop
-navigation and on-page rails now fill the dynamic viewport with independent scrolling,
-while the mobile stacked layout remains content-height. Browser geometry coverage measures
-both rails against the configured viewport.
+This session added JSON Schema as a fourth format (cards 24-26, ADR 08), reworked the viewer
+for density (28-31: content-height sidebar, collapsed items, 90px rows down to 36px, scroll-spy
+rewritten), added a VS Code activity-bar rail (33), fixed the dev CLI serving a stale shell
+(32), and closed every spec-coverage gap across all four formats (15-23, 34-44).
 
-Card [05](boards/project-backlog/05-ui-schema-viewer.md) is back in **Review**. Schema tree
-disclosure controls now share the property row's top inset, and browser geometry coverage
-keeps each chevron centred on its label in both expanded and collapsed states.
+## What to do next
 
-Card [14](boards/project-backlog/14-browser-workspaces-and-pwa.md) is in **Review**.
-GitHub Pages is a local-first installable PWA with versioned IndexedDB workspaces,
-multi-file import, partial-failure handling, confirmed deletion and offline reopening.
-Bundled examples remain immutable. VS Code development opens an isolated `examples/`
-Extension Host, and supported files expose native Explorer/editor context actions.
+1. **Sign off, or change the gate.** 44 cards are waiting on `peer-reviewed`. Either review
+   them, delegate the criterion explicitly, or remove the field from `.config.json`.
+2. **Look at the VS Code rail.** `bun run dev:extension`, full window restart. It is the only
+   piece of this work with no visual verification behind it.
+3. **Re-audit if a coverage number is needed.** The four reports in `docs/06-spec-coverage/`
+   are marked superseded; their matrices predate cards 38-44.
 
-Card [09](boards/project-backlog/09-vscode-extension.md) remains in **Review**. Its embedded
-viewer now routes plain nav clicks explicitly because VS Code webviews suppress default hash-link
-navigation. A clean Extension Development Host verified real pointer navigation and scrolling;
-the standard Extension Host integration test remains green.
+## Lessons worth keeping
 
-Card [11](boards/project-backlog/11-github-pages-deploy-and-release.md) is in **Review**.
-The public package contains a bundled CLI and viewer with explicit runtime dependencies;
-CI covers Storybook and an isolated lifecycle-free consumer install, the release workflow
-refreshes tracked artifacts, and dedicated GitHub workflows deploy the example Pages site
-and package or publish the VS Code extension.
+Five defects this session passed a fully green test suite and were caught only by building a
+site and looking at it: a duplicated description, a 90px surface, a CSS rule Svelte silently
+pruned to a no-op, parser internals leaking into every schema row, and schema examples parsed
+by every format and rendered by none.
 
-Cards [04](boards/project-backlog/04-ui-atoms-and-molecules.md),
-[05](boards/project-backlog/05-ui-schema-viewer.md) and
-[06](boards/project-backlog/06-ui-openapi-renderer.md) and
-[07](boards/project-backlog/07-viewer-spa-shell.md) and
-[08](boards/project-backlog/08-cli-static-site-generator.md) and
-[09](boards/project-backlog/09-vscode-extension.md) are in **Review** with their test and
-clean-code gates satisfied. Card
-[10](boards/project-backlog/10-asyncapi-and-jsonrpc-renderers.md) is in **Review**.
-AsyncAPI and JSON-RPC use extracted operation/method/message components, the shared schema
-catalog and canonical slug helper, with format-level unit and browser coverage.
-
-Card [12](boards/project-backlog/12-development-modes.md) is in **Review**. Root commands
-cover the browser viewer, Storybook UI, source CLI, extension watcher and core compiler
-watch; VS Code F5 is connected to the extension's background development build.
-
-Card [13](boards/project-backlog/13-full-testid-and-playwright-coverage.md) is in **Review**.
-Every production semantic/interactive Svelte element is statically checked for a stable
-hook; rendered browser states are checked for missing and duplicate IDs. Playwright covers
-every browser-facing workflow and all three supported formats through real CLI output.
-
-## Next
-
-Collect human review/sign-off for the completed cards.
-
-## Later
-
-- AsyncAPI and JSON-RPC renderers stay thin this pass — they exist to prove the plugin seam
-  (card 10). Depth once OpenAPI is finished.
-- Swagger 2.0 input is rejected with a message pointing at `swagger2openapi`. Revisit if
-  users hit it.
-- No per-page HTML in the generated site. Revisit if SEO becomes a requirement; see
-  `decisions/03-cli-ships-a-prebuilt-shell.md`.
-
-## Outcomes / blockers
-
-**Done and verified:**
-
-- Workspace, strict TypeScript, Biome, example specs for all three formats.
-- `@apibox/core`: 75 tests green, covering recursive `$ref` cycle detection, path-level
-  parameter inheritance, response ordering, both `example` spellings, the Swagger 2.0
-  rejection, tuple schemas, multiple composition keywords, closed-vs-unspecified objects,
-  partial dereferencing when an external `$ref` is unreachable, `content`-based parameters
-  and headers, AsyncAPI 2.6 channel parameters, and OpenRPC `paramStructure`.
-- Six decisions recorded in `decisions/`.
-- UI foundations, Storybook, atoms, molecules, SchemaViewer, all three renderers and the
-  shared viewer shell, static-site CLI and VS Code extension are implemented; workspace
-  verification is green at 273 standard-gate tests plus one real VS Code Extension Host
-  integration test; all workspace targets build, and the VSIX packages.
-- Full test-ID coverage is enforced from one shared policy at source and browser runtime;
-  CI runs the same 251 unit and 22 Playwright scenarios as the local review gate.
-- Root release packaging is self-contained across workspace boundaries. A lifecycle-free
-  archive installed in an isolated project and generated a valid site through its binary;
-  Storybook, release-artifact and Pages workflows are in place.
-- All workspace packages expose `dev`; the root provides named commands for every runnable
-  surface, and each was smoke-tested through readiness.
-- VS Code section, document and home links no longer depend on the webview's suppressed anchor
-  default. A real pointer click in a clean Extension Development Host changed the route from
-  `#/petstore` to `#/petstore/listpets` and scrolled to the rendered operation.
-- Schema disclosure arrows are aligned with their property headers across standalone and
-  embedded bundles, with an expanded/collapsed geometry regression in Playwright.
-- The shipped dark/light palettes now use a deliberate surface ladder, quieter status fills
-  and distinct workspace inputs; all content-surface and form-boundary contrast checks pass.
-- Desktop navigation and on-page rails fill the dynamic viewport and scroll independently;
-  a browser geometry regression protects both surfaces while mobile remains content-height.
-- Native VS Code icon, toolbar, widget, contrast and diagnostic roles now flow through the
-  semantic adapter; high contrast has Storybook, token-resolution and browser coverage.
-
-**Unresolved:**
-
-- Human review/sign-off remains for all Review cards.
+Four separate times a new or newly-optional field made a previously valid document fail
+`isApiDocument`. That surfaces as a blank viewer and e2e "element(s) not found", never as a
+unit test failure. Any change adding a field to the model must also teach `packages/core/src/validate.ts`.
